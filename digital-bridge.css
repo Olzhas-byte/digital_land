@@ -1,0 +1,112 @@
+/* Digital Bridge 2026: night-city atmosphere and photographic role cards. */
+:root {
+  color-scheme: dark;
+  --kt-ai-bg: #090b1c;
+  --kt-ai-bg-soft: #15182c;
+  --kt-ai-fg: #f7f7ff;
+  --kt-ai-fg-muted: #b8bdd5;
+  --kt-ai-fg-faint: #a3aac4;
+  --kt-ai-primary: #9661ee;
+  --kt-ai-primary-subtle: #272043;
+  --kt-ai-card-bg: #14172b;
+  --kt-ai-border: #35364f;
+  --kt-ai-divider: #35364f;
+  --kt-ai-bg-glass: #090b1ce8;
+  --kt-ai-focus-shadow: 0 0 0 3px #bf9aff80;
+}
+body {
+  background: radial-gradient(ellipse at 100% 42%, #42216b42, transparent 45%),
+    radial-gradient(ellipse at 0% 75%, #162f6942, transparent 45%), #090b1c;
+}
+.kt-ai-pagehead { background: #090b1ce8; border-color: #ffffff16; }
+.kt-ai-brand-row { color: #fff; }
+.header-caption { color: #c1b3ed; letter-spacing: 2px; }
+.kt-ai-hero {
+  position: relative;
+  padding: 76px 0 72px;
+  background: linear-gradient(90deg, #090b1cf5 0%, #090b1ca8 42%, #090b1c08 76%),
+    linear-gradient(0deg, #090b1c, transparent 42%), url('assets/astana.png') center 53% / cover;
+  border-bottom: 1px solid #ffffff0c;
+}
+.hero-layout { min-height: 390px; align-items: end; }
+.hero-copy { position: relative; }
+.eyebrow { color: #c3b2ef; }
+.status-dot { background: #b28aff; box-shadow: 0 0 15px #ac7aff; }
+.kt-ai-hero h1 { color: #fff; text-shadow: 0 3px 28px #090b1c80; }
+.kt-ai-hero h1 em { color: #bb98ff; }
+.kt-ai-hero-sub { color: #d6d8e8; }
+.hero-note { color: #b5b9d1; }
+.hero-link { background: linear-gradient(110deg, #8651dd, #b34f8b 62%, #db6441); box-shadow: 0 8px 40px #7541cb30; }
+.hero-link:hover { background: linear-gradient(110deg, #9863ed, #c9609c 62%, #ed7653); }
+.event-signature { justify-self: end; padding: 22px 24px; border-left: 2px solid #b991ff; background: #090b1c9e; backdrop-filter: blur(12px); max-width: 330px; }
+.event-coordinate { display: block; font: 10px var(--kt-ai-font-mono); letter-spacing: 2px; color: #c8b3ef; }
+.event-signature strong { display: block; font-size: 25px; line-height: 1.25; letter-spacing: -.8px; margin: 14px 0; }
+.event-signature a { font-size: 12px; text-decoration: none; color: #ded3f9; }
+#wizard { padding-top: 24px; }
+.steps { background: #111426d9; border-radius: 10px; overflow: hidden; border: 1px solid #34354f; }
+.steps span { color: #aeb5ce; }
+.steps span.current { color: #ede4ff; background: #35234f; }
+.steps span.current:after { background: #b58cff; }
+.steps span.done { color: #d1c0f3; background: #201b36; }
+.kt-ai-section-head { margin-bottom: 28px; }
+#roleGrid { gap: 20px; }
+.role-poster, .role-poster[data-role=custom] {
+  padding: 0;
+  min-height: 368px;
+  overflow: hidden;
+  border: 1px solid #ffffff24;
+  border-radius: 14px;
+  background: #151a30;
+  isolation: isolate;
+  justify-content: flex-end;
+  box-shadow: 0 12px 32px #03041330;
+}
+.role-image { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 30%; z-index: -2; transition: transform .45s ease; }
+.role-poster:before { content: ''; position: absolute; inset: 0; z-index: -1; background: linear-gradient(180deg, #090b1c00 25%, #090b1c22 42%, #090b1ca6 100%); }
+.role-caption { margin: 12px; padding: 16px; width: calc(100% - 24px); min-height: 158px; background: #0b1023ed; border: 1px solid #ffffff26; border-radius: 9px; backdrop-filter: blur(14px); }
+.poster-badge { color: #d5bcff; font-size: 9px; margin-bottom: 9px; }
+.poster-title { color: #fff; font-size: 17px; line-height: 1.3; letter-spacing: -.5px; margin-bottom: 9px; overflow-wrap: anywhere; }
+.poster-desc { color: #d0d4e4; font-size: 12px; line-height: 1.6; max-width: none; }
+.poster-arrow { display: grid; place-items: center; right: 16px; top: 16px; width: 34px; height: 34px; background: #0b1023b8; border: 1px solid #ffffff45; border-radius: 50%; color: #fff; }
+.role-poster:hover,.role-poster[data-role=custom]:hover { background: #151a30; border-color: #b58cff; transform: translateY(-4px); box-shadow: 0 12px 36px #794ec52b; }
+.role-poster:hover .role-image { transform: scale(1.055); }
+.role-poster.selected { border-color: #c3a1ff; box-shadow: 0 0 0 2px #a579ed; }
+.product-header { background: #2a2345; }
+.product-header .kt-icon, .reco { color: #d3b7ff; }
+.product-card:hover { border-color: #b58cff; }
+.product-card.selected { outline-color: #b58cff; }
+.kt-ai-card { background: #14172b; border-color: #35364f; }
+.kt-ai-input,.kt-ai-textarea,.kt-ai-select { background: #0b1023; color: #f5f3ff; border-color: #42455f; }
+.kt-ai-input::placeholder,.kt-ai-textarea::placeholder { color: #929ab7; }
+.prompt-output { background: #0b1023; color: #e2ddef; }
+.field-error { color: #ffb09b; }
+.kt-ai-btn[data-variant=primary] { background: #9160df; color: white; }
+.kt-ai-btn[data-variant=ghost] { color: #e2ddef; }
+.kt-ai-btn[data-variant=ghost]:hover { background: #302744; }
+a:focus-visible,button:focus-visible,[role=button]:focus-visible { outline-color: #d1b4ff; }
+.skip-link { background: #252039; color: white; }
+@media (max-width: 1000px) {
+  .role-caption { padding: 14px; margin: 10px; width: calc(100% - 20px); }
+  .poster-title { font-size: 16px; }
+  #roleGrid { gap: 16px; }
+}
+@media (max-width: 700px) {
+  .kt-ai-hero { padding: 44px 0 36px; background-position: center, center, 63% center; }
+  .hero-layout { min-height: auto; gap: 32px; }
+  .event-signature { justify-self: start; padding: 16px 20px; }
+  .event-signature strong { font-size: 20px; }
+  .role-poster,.role-poster[data-role=custom] { min-height: 340px; }
+  .role-caption { min-height: 172px; padding: 12px; margin: 8px; width: calc(100% - 16px); }
+  .poster-title { font-size: 15px; }
+  .poster-desc { font-size: 11px; }
+  .poster-badge { font-size: 8px; letter-spacing: .6px; }
+  #roleGrid { gap: 12px; }
+}
+@media (max-width: 450px) {
+  #roleGrid { grid-template-columns: 1fr; gap: 16px; }
+  .role-poster,.role-poster[data-role=custom] { min-height: 420px; }
+  .role-caption { min-height: 132px; margin: 12px; padding: 18px; width: calc(100% - 24px); }
+  .poster-title { font-size: 20px; }
+  .poster-desc { font-size: 13px; }
+  .poster-badge { font-size: 9px; }
+}

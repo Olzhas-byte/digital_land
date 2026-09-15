@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru" data-theme="auto">
+<html lang="ru" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -8,126 +8,36 @@
 <link rel="stylesheet" href="design-system/kt-ai-tokens.css">
 <link rel="stylesheet" href="design-system/kt-ai-components.css">
 <link rel="stylesheet" href="design-system/kt-ai-page.css">
-<style>
-  a.kt-ai-btn, a.kt-ai-brand-row { text-decoration: none; }
-  .step { display: none; }
-  .step.active { display: block; }
-
-  .kt-ai-hero {
-    padding: var(--kt-ai-space-16) 0 var(--kt-ai-space-12);
-    background: linear-gradient(180deg, var(--kt-ai-bg-soft) 0%, var(--kt-ai-bg) 100%);
-  }
-
-  /* Индикатор шагов */
-  .steps {
-    display: flex; justify-content: center; gap: var(--kt-ai-space-3);
-    flex-wrap: wrap; margin-bottom: var(--kt-ai-space-10);
-    font-size: var(--kt-ai-text-sm); color: var(--kt-ai-fg-faint);
-  }
-  .steps span {
-    display: inline-flex; align-items: center; gap: var(--kt-ai-space-2);
-    padding: var(--kt-ai-space-2) var(--kt-ai-space-4);
-    border-radius: var(--kt-ai-radius-full); background: var(--kt-ai-bg-soft);
-  }
-  .steps span.done { color: var(--kt-ai-status-ok-fg); background: var(--kt-ai-status-ok-bg); }
-  .steps span.current { color: var(--kt-ai-fg-on-fill); background: var(--kt-ai-primary); }
-
-  /* Постеры ролей — офлайн, без внешних картинок */
-  .role-poster {
-    position: relative; overflow: hidden; cursor: pointer;
-    min-height: 220px; display: flex; flex-direction: column; justify-content: flex-end;
-    padding: var(--kt-ai-space-6);
-    border-radius: var(--kt-ai-radius-2xl);
-    border: 1px solid var(--kt-ai-border);
-    background:
-      radial-gradient(120% 90% at 100% 0%, var(--poster-bg) 0%, transparent 60%),
-      var(--kt-ai-card-bg);
-    transition: transform var(--kt-ai-dur-base) var(--kt-ai-ease-standard), box-shadow var(--kt-ai-dur-base) var(--kt-ai-ease-standard);
-  }
-  .role-poster[data-wide] { grid-column: span 2; }
-  @media (max-width: 620px) { .role-poster[data-wide] { grid-column: span 1; } }
-  .role-poster:hover { transform: translateY(-6px); box-shadow: var(--kt-ai-shadow-lg); }
-  .role-poster:focus-visible { outline: none; box-shadow: var(--kt-ai-focus-shadow); }
-  .role-poster.selected { outline: 3px solid var(--poster-fg); outline-offset: -3px; }
-  .role-poster .kt-icon {
-    position: absolute; top: var(--kt-ai-space-6); right: var(--kt-ai-space-6);
-    width: 44px; height: 44px; color: var(--poster-fg); opacity: .9;
-  }
-  .poster-badge {
-    display: inline-flex; align-self: flex-start; align-items: center;
-    padding: var(--kt-ai-space-1) var(--kt-ai-space-3); margin-bottom: var(--kt-ai-space-3);
-    border-radius: var(--kt-ai-radius-full);
-    font-size: var(--kt-ai-text-xs); font-weight: var(--kt-ai-weight-medium);
-    color: var(--poster-fg); background: var(--poster-bg);
-  }
-  .poster-title { font-size: var(--kt-ai-text-xl); font-weight: var(--kt-ai-weight-bold); color: var(--kt-ai-fg); margin-bottom: var(--kt-ai-space-2); }
-  .poster-desc { font-size: var(--kt-ai-text-sm); color: var(--kt-ai-fg-muted); line-height: var(--kt-ai-leading-normal); }
-
-  /* Цветовые темы постеров — из чипов и статусов ДС, работают в обеих темах */
-  [data-tone="green"]  { --poster-bg: var(--kt-ai-chip-green-bg);  --poster-fg: var(--kt-ai-chip-green-fg); }
-  [data-tone="blue"]   { --poster-bg: var(--kt-ai-chip-blue-bg);   --poster-fg: var(--kt-ai-chip-blue-fg); }
-  [data-tone="orange"] { --poster-bg: var(--kt-ai-chip-orange-bg); --poster-fg: var(--kt-ai-chip-orange-fg); }
-  [data-tone="purple"] { --poster-bg: var(--kt-ai-chip-purple-bg); --poster-fg: var(--kt-ai-chip-purple-fg); }
-  [data-tone="red"]    { --poster-bg: var(--kt-ai-chip-red-bg);    --poster-fg: var(--kt-ai-chip-red-fg); }
-  [data-tone="gray"]   { --poster-bg: var(--kt-ai-chip-gray-bg);   --poster-fg: var(--kt-ai-chip-gray-fg); }
-  [data-tone="ai"]     { --poster-bg: var(--kt-ai-primary-subtle); --poster-fg: var(--kt-ai-primary); }
-
-  /* Карточки продуктов */
-  .product-card {
-    cursor: pointer; overflow: hidden; position: relative;
-    background: var(--kt-ai-card-bg); border: 1px solid var(--kt-ai-border);
-    border-radius: var(--kt-ai-radius-xl);
-    transition: transform var(--kt-ai-dur-base) var(--kt-ai-ease-standard), box-shadow var(--kt-ai-dur-base) var(--kt-ai-ease-standard), border-color var(--kt-ai-dur-base);
-  }
-  .product-card:hover { transform: translateY(-4px); box-shadow: var(--kt-ai-shadow-lg); border-color: var(--kt-ai-primary); }
-  .product-card:focus-visible { outline: none; box-shadow: var(--kt-ai-focus-shadow); }
-  .product-card.selected { outline: 2px solid var(--kt-ai-primary); }
-  .product-card.recommended { border-color: var(--poster-fg); }
-  .product-card .reco {
-    position: absolute; top: var(--kt-ai-space-4); right: var(--kt-ai-space-4);
-    padding: var(--kt-ai-space-1) var(--kt-ai-space-3); border-radius: var(--kt-ai-radius-full);
-    font-size: var(--kt-ai-text-xs); font-weight: var(--kt-ai-weight-medium);
-    background: var(--kt-ai-card-bg); color: var(--poster-fg); display: none;
-  }
-  .product-card.recommended .reco { display: inline-flex; }
-  .product-header {
-    height: 110px; display: flex; align-items: center; justify-content: center;
-    background: var(--poster-bg);
-  }
-  .product-header .kt-icon { width: 40px; height: 40px; color: var(--poster-fg); }
-  .product-body { padding: var(--kt-ai-space-5); }
-  .product-title { font-size: var(--kt-ai-text-lg); font-weight: var(--kt-ai-weight-semibold); color: var(--kt-ai-fg); margin-bottom: var(--kt-ai-space-2); }
-  .product-desc { font-size: var(--kt-ai-text-sm); color: var(--kt-ai-fg-muted); line-height: var(--kt-ai-leading-normal); }
-
-  .field-error { display: none; margin-top: var(--kt-ai-space-2); font-size: var(--kt-ai-text-xs); color: var(--kt-ai-danger); }
-  .kt-ai-field[data-invalid="true"] .field-error { display: block; }
-
-  .prompt-output {
-    background: var(--kt-ai-bg-soft); padding: var(--kt-ai-space-6);
-    border-radius: var(--kt-ai-radius-xl); border: 1px solid var(--kt-ai-border);
-    font-family: var(--kt-ai-font-mono); font-size: var(--kt-ai-text-sm);
-    white-space: pre-wrap; max-height: 450px; overflow-y: auto;
-  }
-</style>
+<meta name="description" content="Превратите идею в AI-сервис: выберите роль, настройте продукт и соберите промт для Vibe AI.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="studio.css">
+<link rel="stylesheet" href="digital-bridge.css">
 </head>
 <body>
+<a class="skip-link" href="#wizard">Перейти к конструктору</a>
 
 <header class="kt-ai-pagehead">
   <div class="kt-ai-wrap kt-ai-pagehead-in">
-    <a class="kt-ai-brand-row" href="#"><img src="design-system/brand/kt-ai-logo.png" alt="Vibe42"> <span>Digital Bridge</span></a>
-    <span class="kt-ai-spacer"></span>
+    <a class="kt-ai-brand-row" href="./"><img src="design-system/brand/kt-ai-logo.png" alt="Vibe42"> <span>Digital Bridge</span></a>
+    <span class="header-caption">ASTANA · 2026</span><span class="kt-ai-spacer"></span>
     <button class="kt-ai-btn" data-variant="ghost" type="button" onclick="resetWizard()">Начать заново</button>
   </div>
 </header>
 
-<section class="kt-ai-hero" data-align="center">
-  <div class="kt-ai-wrap">
-    <h1 style="max-width: 720px; margin: 0 auto">Создай свой AI-сервис за 60 минут</h1>
-    <p class="kt-ai-hero-sub" style="max-width: 560px; margin: var(--kt-ai-space-4) auto 0">Выбери роль, настрой продукт и получи готовый промт для Vibe AI</p>
+<section class="kt-ai-hero">
+  <div class="kt-ai-wrap hero-layout">
+    <div class="hero-copy">
+      <div class="eyebrow"><span class="status-dot"></span> AI & DIGITAL BRIDGE 2026</div>
+      <h1>Ваша идея.<br>Теперь <em>с AI.</em></h1>
+      <p class="kt-ai-hero-sub">Создайте свой AI-сервис за 60 минут.<br>Выберите задачу — мы поможем собрать промт для Vibe AI.</p>
+      <a class="hero-link" href="#wizard">Начать с вашей роли <span aria-hidden="true">↗</span></a>
+      <div class="hero-note">4 простых шага <span>·</span> Без опыта в разработке</div>
+    </div>
+    <div class="event-signature"><span class="event-coordinate">ASTANA, KAZAKHSTAN</span><strong>Мост в ваше<br>цифровое будущее.</strong><a href="https://digitalbridge.ai/ru/" target="_blank" rel="noopener">Digital Bridge 2026 ↗</a></div>
   </div>
 </section>
 
-<main class="kt-ai-wrap" style="padding: var(--kt-ai-space-12) 0">
+<main class="kt-ai-wrap" id="wizard">
 
   <div class="steps" id="stepsBar" aria-label="Прогресс">
     <span data-step="1">1 · Роль</span>
@@ -138,20 +48,20 @@
 
   <!-- Шаг 1: роль -->
   <div id="step1" class="step active">
-    <div class="kt-ai-section-head" style="text-align: center; margin-bottom: var(--kt-ai-space-10)">
-      <h2>Кто вы?</h2>
+    <div class="kt-ai-section-head" >
+      <div class="eyebrow section-kicker">01 / ТОЧКА СТАРТА</div><h2>В какой роли вы создаёте?</h2>
       <p>Выберите роль — мы подсветим подходящие сервисы</p>
     </div>
-    <div class="kt-ai-grid" data-cols="4" style="gap: var(--kt-ai-space-6)" id="roleGrid"></div>
+    <div class="kt-ai-grid" data-cols="4"  id="roleGrid"></div>
   </div>
 
   <!-- Шаг 2: сервис -->
   <div id="step2" class="step">
-    <div class="kt-ai-section-head" style="text-align: center; margin-bottom: var(--kt-ai-space-10)">
+    <div class="kt-ai-section-head" >
       <h2>Выберите сервис</h2>
       <p id="productsSub">8 готовых AI-решений под вашу задачу</p>
     </div>
-    <div class="kt-ai-grid" data-cols="2" style="gap: var(--kt-ai-space-6)" id="productGrid"></div>
+    <div class="kt-ai-grid" data-cols="2"  id="productGrid"></div>
     <div style="text-align: center; margin-top: var(--kt-ai-space-8)">
       <button class="kt-ai-btn" data-variant="ghost" type="button" onclick="goToStep(1)">← Назад</button>
     </div>
@@ -159,7 +69,7 @@
 
   <!-- Шаг 3: настройка -->
   <div id="step3" class="step">
-    <div class="kt-ai-section-head" style="text-align: center; margin-bottom: var(--kt-ai-space-10)">
+    <div class="kt-ai-section-head" >
       <h2 id="productTitle">Настройка сервиса</h2>
       <p>Ответьте на несколько вопросов для персонализации</p>
     </div>
@@ -205,7 +115,7 @@
 
   <!-- Шаг 4: промт -->
   <div id="step4" class="step">
-    <div class="kt-ai-section-head" style="text-align: center; margin-bottom: var(--kt-ai-space-10)">
+    <div class="kt-ai-section-head" >
       <h2>Ваш промт готов!</h2>
       <p>Скопируйте или откройте в Vibe AI</p>
     </div>
@@ -235,7 +145,7 @@
   <span>Создай свой AI-сервис за 60 минут</span>
 </footer>
 
-<div class="kt-ai-toast-stack" id="toasts"></div>
+<div class="kt-ai-toast-stack" id="toasts" role="status" aria-live="polite"></div>
 
 <script src="design-system/icons/kt-ai-icons.js"></script>
 <script>
@@ -418,11 +328,12 @@ const icon = name => `<svg class="kt-icon" aria-hidden="true"><use href="#${name
 
 function renderRoles() {
   document.getElementById('roleGrid').innerHTML = roles.map(r => `
-    <div class="role-poster" role="button" tabindex="0" data-role="${r.id}" data-tone="${r.tone}"${r.wide ? ' data-wide' : ''}>
-      ${icon(r.icon)}
+    <div class="role-poster" role="button" tabindex="0" data-role="${r.id}" data-tone="${r.tone}">
+      <img class="role-image" src="assets/roles/${r.id}.jpg" alt="" loading="lazy" decoding="async">
+      <span class="poster-arrow" aria-hidden="true">↗</span><div class="role-caption">
       <div class="poster-badge">${r.badge}</div>
       <div class="poster-title">${r.title}</div>
-      <div class="poster-desc">${r.desc}</div>
+      <div class="poster-desc">${r.desc}</div></div>
     </div>`).join('');
   document.querySelectorAll('.role-poster').forEach(el => {
     const pick = () => selectRole(el.dataset.role);
@@ -481,8 +392,11 @@ function goToStep(n) {
     const k = Number(s.dataset.step);
     s.classList.toggle('done', k < n);
     s.classList.toggle('current', k === n);
+    if (k === n) s.setAttribute('aria-current', 'step'); else s.removeAttribute('aria-current');
   });
-  window.scrollTo({ top: document.getElementById('stepsBar').offsetTop - 80, behavior: 'smooth' });
+  const heading = document.querySelector(`#step${n} h2`);
+  heading.tabIndex = -1; heading.focus({ preventScroll: true });
+  window.scrollTo({ top: document.getElementById('stepsBar').offsetTop - 80, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
 }
 
 function validate() {
@@ -563,6 +477,8 @@ function resetWizard() {
 
 renderRoles();
 renderProducts();
+document.querySelector('[data-step="1"]').classList.add('current');
+document.querySelector('[data-step="1"]').setAttribute('aria-current', 'step');
 </script>
 
 </body>
