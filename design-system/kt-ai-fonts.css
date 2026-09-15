@@ -1,0 +1,51 @@
+/* ============================================================
+ * KT AI Fonts — самохостинг Inter. Подключать ПЕРВЫМ, до токенов.
+ *
+ * Зачем отдельным файлом, а не внутри токенов: `url()` в CSS резолвится
+ * относительно САМОГО CSS-файла, а прототипы ДС инлайнят CSS прямо в HTML —
+ * там относительный путь сломался бы. Поэтому шрифт подключают явно те,
+ * кто строит приложение; самодостаточные прототипы остаются лёгкими
+ * (иначе каждый вырос бы на ~240 КБ base64) и используют системный запасной.
+ *
+ * Обязателен для продакшн-приложения: без него `font-family: Inter` из токенов
+ * молча уходит в системный шрифт, а он на 2–5% уже — плывут ширины колонок
+ * и обрезка текста. То есть «прототип === продакшн» перестаёт выполняться.
+ *
+ * Файл: fonts/InterVariable-subset.woff2 — 178 КБ, ОДИН вариативный на веса
+ * 100–900. Покрытие: латиница, полная кириллица (включая казахские ӘҒҚҢӨҰҮҺІ),
+ * ₸ и типографские знаки. Лицензия SIL OFL — fonts/OFL.txt.
+ *
+ * Подключение:
+ *   <link rel="stylesheet" href="design-system/kt-ai-fonts.css">
+ *   <link rel="stylesheet" href="design-system/kt-ai-tokens.css">
+ *   <link rel="stylesheet" href="design-system/kt-ai-components.css">
+ *
+ * Ускорить первую отрисовку (необязательно, но заметно):
+ *   <link rel="preload" as="font" type="font/woff2" crossorigin
+ *         href="design-system/fonts/InterVariable-subset.woff2">
+ * ============================================================ */
+
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  /* Вариативный: один файл покрывает весь диапазон весов ДС (400/500/600/700). */
+  font-weight: 100 900;
+  font-display: swap;   /* текст виден сразу системным, затем подменяется — без «мигания пустотой» */
+  src: url("fonts/InterVariable-subset.woff2") format("woff2-variations"),
+       url("fonts/InterVariable-subset.woff2") format("woff2");
+}
+
+/* JetBrains Mono — ТОЛЬКО для клавиш (.kt-ai-kbd) и командных групп.
+   Числа на нём больше не набираются: в JetBrains Mono НЕТ глифа ₸, поэтому
+   в каждой сумме «1 240 000 ₸» тенге подставлялся из другого шрифта, что рвало
+   табличное выравнивание. Числа переведены на Inter + tabular-nums — так уже
+   было у значения KPI, и цифры Inter выровнены по ширине не хуже моноширинных.
+   Отсюда и крошечный сабсет: нужны только цифры, латиница и символы клавиш. */
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url("fonts/JetBrainsMono-subset.woff2") format("woff2-variations"),
+       url("fonts/JetBrainsMono-subset.woff2") format("woff2");
+}

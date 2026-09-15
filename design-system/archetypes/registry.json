@@ -1,0 +1,301 @@
+{
+  "$comment": "runtimes — в каких рантаймах архетип действительно реализован. Поле обязательно и проверяется гейтом 21: пока его не было, реестр объявлял все пятнадцать архетипов stable, а React-кит рисовал шесть — продукт узнавал об этом, только увидев деградировавший экран.",
+  "fallback": "queue",
+  "archetypes": [
+    {
+      "id": "queue",
+      "title": "Операционная очередь",
+      "whenToUse": "5+ записей со статусом/сроком/суммой; владелец проверяет, подтверждает, закрывает. Дефолт для реестров, очередей, инбоксов.",
+      "requires": [
+        "table",
+        "statuses",
+        "scenario"
+      ],
+      "recommends": [
+        "drawer",
+        "kpis"
+      ],
+      "forbids": [],
+      "renderer": "renderMain",
+      "runtimes": [
+        "html",
+        "kit"
+      ],
+      "status": "stable"
+    },
+    {
+      "id": "dashboard",
+      "title": "Дашборд состояния",
+      "whenToUse": "Управление метрикой процесса: KPI-табы управляют чартом периода (референс ElevenLabs dashboard), внизу разборы и список «требует внимания».",
+      "requires": [
+        "table",
+        "statuses"
+      ],
+      "recommends": [
+        "dashboard",
+        "kpis"
+      ],
+      "forbids": [],
+      "renderer": "renderDashboard",
+      "runtimes": [
+        "html",
+        "kit"
+      ],
+      "status": "stable"
+    },
+    {
+      "id": "cockpit",
+      "title": "Кабинет решения",
+      "whenToUse": "Один фокусный объект с сигналами и решением + компактная очередь сбоку. Мониторинг и обработка исключений.",
+      "requires": [
+        "table",
+        "statuses",
+        "scenario"
+      ],
+      "recommends": [
+        "drawer",
+        "kpis"
+      ],
+      "forbids": [],
+      "renderer": "renderCockpit",
+      "runtimes": [
+        "html",
+        "kit"
+      ],
+      "status": "stable"
+    },
+    {
+      "id": "compare",
+      "title": "Сверка источников",
+      "whenToUse": "Попарная сверка двух источников/версий по полям, расхождения подсвечены. Аудит, финансы, контрагентские версии договоров.",
+      "requires": [
+        "table",
+        "compare"
+      ],
+      "recommends": [
+        "scenario",
+        "drawer"
+      ],
+      "forbids": [],
+      "renderer": "renderCompare",
+      "runtimes": [
+        "html",
+        "kit"
+      ],
+      "status": "stable"
+    },
+    {
+      "id": "conversational",
+      "title": "Разговорный агент",
+      "whenToUse": "Чат как главная рабочая область, человек вне построчной очереди (агент отвечает/делает по запросу). Референс: ElevenLabs Conversational AI.",
+      "requires": [
+        "ai"
+      ],
+      "recommends": [],
+      "forbids": [],
+      "renderer": "renderConversational",
+      "runtimes": [
+        "html",
+        "kit"
+      ],
+      "status": "stable"
+    },
+    {
+      "id": "custom",
+      "title": "Свободный экран (запасной)",
+      "whenToUse": "Экран не ложится ни в один архетип — соберите его из блоков: sections с type text/cards/chart/kpis/table/chat в любом порядке (хабы, порталы, смешанные обзоры). Консистентность даёт не раскладка, а компоненты.",
+      "requires": [],
+      "recommends": [
+        "sections"
+      ],
+      "forbids": [],
+      "renderer": "renderCustom",
+      "runtimes": [
+        "html",
+        "kit"
+      ],
+      "status": "stable"
+    },
+    {
+      "id": "document",
+      "title": "Документ с правками агента",
+      "whenToUse": "Документоцентричный процесс: вычитка одного документа (договор, письмо, ТЗ) — правки и риски агента по фрагментам, принять/отклонить.",
+      "requires": [
+        "document",
+        "scenario"
+      ],
+      "recommends": [
+        "banner",
+        "kpis"
+      ],
+      "forbids": [],
+      "renderer": "renderDocument",
+      "runtimes": [
+        "html"
+      ],
+      "status": "stable"
+    },
+    {
+      "id": "copilot",
+      "title": "Чат + артефакт",
+      "whenToUse": "Диалог с агентом, который производит файл/документ/слайды: чат слева, живой предпросмотр результата справа.",
+      "requires": [
+        "ai",
+        "artifact"
+      ],
+      "recommends": [
+        "scenario"
+      ],
+      "forbids": [
+        "table"
+      ],
+      "renderer": "renderCopilot",
+      "runtimes": [
+        "html"
+      ],
+      "status": "stable"
+    },
+    {
+      "id": "wizard",
+      "title": "Мастер-заявка",
+      "whenToUse": "Пошаговая подача заявки/оформление с автозаполнением агентом и валидацией по шагам.",
+      "requires": [
+        "wizard"
+      ],
+      "recommends": [
+        "scenario"
+      ],
+      "forbids": [
+        "table"
+      ],
+      "renderer": "renderWizard",
+      "runtimes": [
+        "html"
+      ],
+      "status": "stable"
+    },
+    {
+      "id": "kanban",
+      "title": "Доска статусов",
+      "whenToUse": "Поток работ движется по стадиям и важно видеть распределение: колонки = statuses, карточки = table.rows (новых блоков не нужно).",
+      "requires": [
+        "table",
+        "statuses"
+      ],
+      "recommends": [
+        "scenario",
+        "drawer"
+      ],
+      "forbids": [],
+      "renderer": "renderKanban",
+      "runtimes": [
+        "html"
+      ],
+      "status": "stable"
+    },
+    {
+      "id": "inbox",
+      "title": "Входящие с панелью чтения",
+      "whenToUse": "Список входящих (обращения, письма, заявки) с длинным текстом: слева список, справа постоянная панель чтения с разбором агента.",
+      "requires": [
+        "table",
+        "inbox"
+      ],
+      "recommends": [
+        "scenario",
+        "drawer",
+        "statuses"
+      ],
+      "forbids": [],
+      "renderer": "renderInbox",
+      "runtimes": [
+        "html"
+      ],
+      "status": "stable"
+    },
+    {
+      "id": "analytics",
+      "title": "Аналитический разбор",
+      "whenToUse": "Главная ценность – анализ и выводы, а не построчная работа: сводка агента, 1-4 чарта (bar/line/donut), выводы с тонами.",
+      "requires": [
+        "analytics"
+      ],
+      "recommends": [
+        "kpis",
+        "banner"
+      ],
+      "forbids": [
+        "table"
+      ],
+      "renderer": "renderAnalytics",
+      "runtimes": [
+        "html"
+      ],
+      "status": "stable"
+    },
+    {
+      "id": "calendar",
+      "title": "Расписание по датам",
+      "whenToUse": "Работа привязана к датам и слотам: окна работ, дежурства, сроки – события по дням.",
+      "requires": [
+        "calendar"
+      ],
+      "recommends": [
+        "banner"
+      ],
+      "forbids": [
+        "table"
+      ],
+      "renderer": "renderCalendar",
+      "runtimes": [
+        "html"
+      ],
+      "status": "stable"
+    },
+    {
+      "id": "map",
+      "title": "Схема-карта участка",
+      "whenToUse": "Объекты распределены в пространстве (станции, переезды, площадки): стилизованная SVG-схема с точками-статусами; не геокарта с тайлами.",
+      "requires": [
+        "map"
+      ],
+      "recommends": [
+        "statuses",
+        "banner"
+      ],
+      "forbids": [
+        "table"
+      ],
+      "renderer": "renderMap",
+      "runtimes": [
+        "html"
+      ],
+      "status": "stable"
+    },
+    {
+      "id": "timeline",
+      "title": "Хронология",
+      "whenToUse": "Разбор одного дела/инцидента во времени: кто что сделал и когда, включая шаги агента.",
+      "requires": [
+        "timeline"
+      ],
+      "recommends": [
+        "banner"
+      ],
+      "forbids": [
+        "table"
+      ],
+      "renderer": "renderTimeline",
+      "runtimes": [
+        "html"
+      ],
+      "status": "stable"
+    }
+  ],
+  "open_set_examples": [
+    "gantt — план работ по срокам и зависимостям",
+    "gallery — карточки с превью (фото, документы)",
+    "editor — свободное редактирование длинного текста",
+    "org — оргструктура/иерархия"
+  ]
+}

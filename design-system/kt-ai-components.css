@@ -1,0 +1,1918 @@
+/* ============================================================
+ * KT AI Components v2.1
+ * Требует kt-ai-tokens.css. Только semantic/component токены,
+ * никаких сырых hex. Имена классов v1 сохранены.
+ * Слой @layer kt-components: продуктовый CSS объявляйте в слое
+ * выше (@layer product) или вне слоёв – он выиграет каскад.
+ * Канон: docs/DESIGN.md · Галерея: showcase.html
+ * ============================================================ */
+
+@layer kt-components {
+
+/* border-box для ВСЕХ компонентов ДС, где бы они ни жили.
+   Компоненты вроде .kt-ai-input объявлены как width:100% + padding + border:
+   в content-box они вылезают из контейнера (замерено: 326px в контейнере 300px).
+   Раньше сброс жил только в HTML app-shell, поэтому баг проявлялся ровно там,
+   где ДС вендорят в чужой проект — в основном сценарии передачи разработчикам.
+   Селектор бьёт только по .kt-ai-*, чтобы не трогать вёрстку хост-приложения. */
+[class*="kt-ai-"], [class*="kt-ai-"]::before, [class*="kt-ai-"]::after { box-sizing: border-box; }
+
+/* Сброс UA-хрома для интерактивных компонентов ДС.
+   Браузер не наследует font-family для button/input/select/textarea и рисует
+   кнопкам свою серую заливку. В HTML app-shell это гасил глобальный сброс,
+   поэтому при вендоринге ДС в чужой проект компоненты приезжали сломанными:
+   .kt-ai-tab — с серым UA-фоном, .kt-ai-filter-chip/.seg/.page-btn — в Arial.
+   :where() даёт НУЛЕВУЮ специфичность — любое правило компонента ниже победит. */
+:where(button[class*="kt-ai-"], input[class*="kt-ai-"],
+       select[class*="kt-ai-"], textarea[class*="kt-ai-"]) {
+  font-family: var(--kt-ai-font-sans);
+  font-size: var(--kt-ai-text-sm);
+  color: inherit;
+}
+:where(button[class*="kt-ai-"]) {
+  -webkit-appearance: none; appearance: none;
+  background: none; border: none; cursor: pointer;
+}
+
+/* ---------- База ---------- */
+.kt-ai-app, .kt-ai-shell {
+  background: var(--kt-ai-bg);
+  color: var(--kt-ai-fg);
+  font-family: var(--kt-ai-font-sans);
+  font-size: var(--kt-ai-text-sm);
+  line-height: var(--kt-ai-leading-normal);
+  -webkit-font-smoothing: antialiased;
+}
+.kt-ai-shell {
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: var(--kt-ai-sidebar-width) minmax(0, 1fr);
+}
+.kt-ai-sidebar { background: var(--kt-ai-bg-soft); border-right: 1px solid var(--kt-ai-divider); color: var(--kt-ai-fg-muted); position: sticky; top: 0; align-self: start; height: 100dvh; overflow-y: auto; }
+.kt-ai-main { min-width: 0; background: var(--kt-ai-bg); }
+.kt-ai-work-column { max-width: var(--kt-ai-content-max); margin: 0 auto; padding: var(--kt-ai-space-12) var(--kt-ai-space-8) var(--kt-ai-space-11); }
+.kt-ai-work-column-wide { max-width: var(--kt-ai-content-wide); margin: 0 auto; padding: var(--kt-ai-space-8); }
+.kt-ai-work-column-table { max-width: var(--kt-ai-content-table); margin: 0 auto; padding: var(--kt-ai-space-11) var(--kt-ai-space-8); }
+
+/* Скроллбары */
+.kt-ai-app ::-webkit-scrollbar, .kt-ai-shell ::-webkit-scrollbar { width: 8px; height: 8px; }
+.kt-ai-app ::-webkit-scrollbar-thumb, .kt-ai-shell ::-webkit-scrollbar-thumb { background: var(--kt-ai-border-strong); border-radius: var(--kt-ai-radius-md); }
+.kt-ai-app ::-webkit-scrollbar-track, .kt-ai-shell ::-webkit-scrollbar-track { background: transparent; }
+
+/* Фокус: единый видимый стиль для всего интерактива */
+.kt-ai-app :focus-visible, .kt-ai-shell :focus-visible {
+  outline: 2px solid var(--kt-ai-focus-ring);
+  outline-offset: 1px;
+}
+
+/* ---------- Типографика ---------- */
+.kt-ai-h1 { font-size: var(--kt-ai-text-2xl); font-weight: var(--kt-ai-weight-bold); line-height: var(--kt-ai-leading-tight); letter-spacing: -.02em; }
+.kt-ai-h2 { font-size: var(--kt-ai-text-lg); font-weight: var(--kt-ai-weight-semibold); line-height: var(--kt-ai-leading-tight); letter-spacing: -.01em; }
+.kt-ai-h3 { font-size: var(--kt-ai-text-md); font-weight: var(--kt-ai-weight-semibold); }
+/* Капс оставляем — узнаваемый eyebrow-паттерн. Но капс мелким кеглем это
+   худший случай для чтения, и он не имеет права быть ещё и самым тусклым
+   текстом системы: 11px + .8px разрядки + faint. Кегль на ступень выше,
+   разрядка меньше (на 12px .8px избыточна), цвет — muted. */
+.kt-ai-label { font-family: var(--kt-ai-font-mono); font-size: var(--kt-ai-text-xs); font-weight: var(--kt-ai-weight-semibold); text-transform: uppercase; letter-spacing: .5px; color: var(--kt-ai-fg-muted); }
+.kt-ai-meta { font-size: var(--kt-ai-text-xs); color: var(--kt-ai-fg-muted); }
+.kt-ai-num { font-family: var(--kt-ai-font-sans); font-variant-numeric: tabular-nums; }
+.kt-ai-link { color: var(--kt-ai-link); text-decoration: none; }
+.kt-ai-link:hover { text-decoration: underline; }
+
+/* ---------- Иконки ---------- */
+.kt-icon { width: 16px; height: 16px; display: inline-block; flex: 0 0 16px; color: currentColor; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; vertical-align: -2px; }
+.kt-icon-sm { width: 14px; height: 14px; flex-basis: 14px; }
+.kt-icon-lg { width: 20px; height: 20px; flex-basis: 20px; }
+
+/* ---------- Кнопки ---------- */
+.kt-ai-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--kt-ai-space-3);
+  height: var(--kt-ai-control-h-md);
+  padding: 0 var(--kt-ai-space-5);
+  border-radius: var(--kt-ai-radius-xl);
+  border: 1px solid var(--kt-ai-border-strong);
+  background: var(--kt-ai-bg-elevated);
+  box-shadow: var(--kt-ai-shadow-sm);
+  color: var(--kt-ai-fg);
+  font-family: var(--kt-ai-font-sans);
+  font-size: var(--kt-ai-text-sm);
+  font-weight: var(--kt-ai-weight-medium);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--kt-ai-dur-fast) var(--kt-ai-ease-standard),
+              border-color var(--kt-ai-dur-fast) var(--kt-ai-ease-standard),
+              transform 60ms var(--kt-ai-ease-standard);
+}
+/* hover = тонирующий слой bg-hover поверх поверхности: в dark светлеет, в light темнеет */
+.kt-ai-btn:hover { background-image: linear-gradient(var(--kt-ai-bg-hover), var(--kt-ai-bg-hover)); }
+.kt-ai-btn:active { transform: scale(.98); }
+.kt-ai-btn:disabled { opacity: .4; cursor: default; transform: none; background-image: none; }
+
+.kt-ai-btn[data-variant="primary"] { background: var(--kt-ai-primary); border-color: var(--kt-ai-primary); color: var(--kt-ai-fg-on-fill); font-weight: var(--kt-ai-weight-semibold); box-shadow: inset 0 1px 0 var(--kt-ai-inset-highlight); }
+.kt-ai-btn[data-variant="primary"]:hover { background: var(--kt-ai-primary-hover); border-color: var(--kt-ai-primary-hover); }
+.kt-ai-btn[data-variant="ghost"] { border-color: transparent; background: transparent; box-shadow: none; color: var(--kt-ai-fg-muted); }
+.kt-ai-btn[data-variant="ghost"]:hover { color: var(--kt-ai-fg); background: var(--kt-ai-bg-hover); }
+.kt-ai-btn[data-variant="danger"] { background: transparent; box-shadow: none; border-color: var(--kt-ai-danger); color: var(--kt-ai-danger); }
+.kt-ai-btn[data-variant="danger"]:hover { background: var(--kt-ai-danger); color: var(--kt-ai-fg-on-fill); }
+
+.kt-ai-btn[data-size="sm"] { height: var(--kt-ai-control-h-sm); padding: 0 var(--kt-ai-space-4); font-size: var(--kt-ai-text-xs); border-radius: var(--kt-ai-radius-lg); }
+.kt-ai-btn[data-size="lg"] { height: var(--kt-ai-control-h-lg); padding: 0 var(--kt-ai-space-7); font-size: var(--kt-ai-text-md); border-radius: var(--kt-ai-radius-xl); }
+
+.kt-ai-icon-button {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: var(--kt-ai-control-h-md); height: var(--kt-ai-control-h-md);
+  border-radius: var(--kt-ai-radius-lg); border: none; background: transparent;
+  color: var(--kt-ai-fg-muted); cursor: pointer;
+  transition: background var(--kt-ai-dur-fast) var(--kt-ai-ease-standard), color var(--kt-ai-dur-fast) var(--kt-ai-ease-standard);
+}
+.kt-ai-icon-button:hover, .kt-ai-icon-button[data-active="true"] { background: var(--kt-ai-bg-hover); color: var(--kt-ai-fg); }
+
+/* ---------- Формы ---------- */
+.kt-ai-field { display: flex; flex-direction: column; gap: var(--kt-ai-space-2); margin-bottom: var(--kt-ai-space-5); }
+/* Подпись поля. Две формы записи, и обе законны: <div class="kt-ai-field">
+   с <label for="…"> — и <label class="kt-ai-field"> вокруг контрола, где
+   подпись это <span class="cap">. Вторую использует рантайм (подпись собирается
+   из данных, id придумывать неоткуда), первую — ручная вёрстка.
+   Стиль подписи обязан работать в обеих: пока правило знало только про <label>,
+   рантайм красил свою подпись инлайном мимо канона. */
+.kt-ai-field > label, .kt-ai-field > .cap { font-size: var(--kt-ai-text-xs); color: var(--kt-ai-fg-muted); }
+.kt-ai-field .hint { font-size: var(--kt-ai-text-2xs); color: var(--kt-ai-fg-faint); }
+.kt-ai-field .error { font-size: var(--kt-ai-text-2xs); color: var(--kt-ai-status-risk-fg); }
+
+.kt-ai-input, .kt-ai-select, .kt-ai-textarea {
+  width: 100%;
+  height: 36px;
+  padding: 0 var(--kt-ai-space-5);
+  background: var(--kt-ai-bg-elevated);
+  border: 1px solid var(--kt-ai-border);
+  border-radius: var(--kt-ai-radius-xl);
+  color: var(--kt-ai-fg);
+  font-family: var(--kt-ai-font-sans);
+  font-size: var(--kt-ai-text-sm);
+  transition: border-color var(--kt-ai-dur-fast) var(--kt-ai-ease-standard), box-shadow var(--kt-ai-dur-fast) var(--kt-ai-ease-standard);
+}
+.kt-ai-textarea { height: auto; min-height: 72px; padding: var(--kt-ai-space-4) var(--kt-ai-space-5); resize: vertical; line-height: var(--kt-ai-leading-normal); }
+/* Единственные места, где сквозь hairline-эстетику просвечивала ОС: системный
+   двойной шеврон у select (свой на macOS и свой на Windows) и уголок resize у
+   textarea. Шеврон рисуем через ::after на обёртке, а не фоновой картинкой:
+   data-URI пришлось бы дублировать под каждую тему, иначе стрелка исчезает на
+   тёмном фоне. currentColor решает это сам. */
+.kt-ai-textarea::-webkit-resizer { display: none; }
+.kt-ai-select { -webkit-appearance: none; appearance: none; padding-right: var(--kt-ai-space-8); }
+.kt-ai-select::-ms-expand { display: none; }
+.kt-ai-select-wrap { position: relative; display: inline-flex; align-items: center; width: 100%; }
+.kt-ai-select-wrap > .kt-ai-select { width: 100%; }
+.kt-ai-select-wrap::after {
+  content: ""; position: absolute; right: var(--kt-ai-space-4); width: 14px; height: 14px;
+  pointer-events: none; color: var(--kt-ai-fg-muted); background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") center / 14px 14px no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") center / 14px 14px no-repeat;
+}
+/* Без обёртки шеврон рисуем прямо на select фоном — вес штриха 1.75, как у
+   спрайта. Цвет зашит нейтральным серым: он читается в обеих темах. */
+.kt-ai-select:not(.kt-ai-select-wrap > *) {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238a8a8e' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right var(--kt-ai-space-4) center;
+  background-size: 14px 14px;
+}
+.kt-ai-input::placeholder, .kt-ai-textarea::placeholder { color: var(--kt-ai-fg-faint); }
+.kt-ai-input:focus, .kt-ai-select:focus, .kt-ai-textarea:focus { outline: none; border-color: var(--kt-ai-primary); box-shadow: var(--kt-ai-focus-shadow); }
+.kt-ai-input[data-invalid="true"], .kt-ai-textarea[data-invalid="true"] { border-color: var(--kt-ai-danger); }
+/* data-invalid и на ОБЁРТКЕ поля: PRINCIPLES описывает API как «data-invalid + .error
+   в field», и разработчик естественно вешает атрибут на .kt-ai-field — раньше в этом
+   случае инпут молча оставался обычным, ошибку выдавал только красный текст. */
+.kt-ai-field[data-invalid="true"] :is(.kt-ai-input, .kt-ai-select, .kt-ai-textarea) { border-color: var(--kt-ai-danger); }
+/* Парные строки «ключ-значение» (intake-репитер, ElevenLabs Voice Design) */
+.kt-ai-kv { display: flex; flex-direction: column; gap: var(--kt-ai-space-3); }
+.kt-ai-kv-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: var(--kt-ai-space-3); align-items: center; }
+
+.kt-ai-checkbox { display: inline-flex; align-items: center; gap: var(--kt-ai-space-4); font-size: var(--kt-ai-text-sm); cursor: pointer; }
+/* accent-color красит СИСТЕМНЫЙ чекбокс: жирная галка в квадрате со
+   скруглением ОС, рядом с волосяными строками таблицы — чужеродный элемент,
+   к тому же разный на macOS и Windows. Рисуем свой. */
+.kt-ai-checkbox input {
+  -webkit-appearance: none; appearance: none; position: relative;
+  width: 16px; height: 16px; flex-shrink: 0; margin: 0; cursor: pointer;
+  border: 1px solid var(--kt-ai-border-strong);
+  border-radius: var(--kt-ai-radius-sm);
+  background: var(--kt-ai-bg-elevated);
+  transition: background var(--kt-ai-dur-fast) var(--kt-ai-ease-standard),
+              border-color var(--kt-ai-dur-fast) var(--kt-ai-ease-standard);
+}
+.kt-ai-checkbox input:hover:not(:disabled) { border-color: var(--kt-ai-fg-muted); }
+.kt-ai-checkbox input:checked,
+.kt-ai-checkbox input:indeterminate { background: var(--kt-ai-primary); border-color: var(--kt-ai-primary); }
+/* Галка — две линии через border, а не символ: символ зависит от шрифта. */
+.kt-ai-checkbox input:checked::after {
+  content: ""; position: absolute; left: 4px; top: 1px; width: 5px; height: 9px;
+  border: solid var(--kt-ai-fg-on-fill); border-width: 0 1.75px 1.75px 0;
+  transform: rotate(45deg);
+}
+.kt-ai-checkbox input:indeterminate::after {
+  content: ""; position: absolute; left: 3px; top: 6px; width: 8px; height: 1.75px;
+  background: var(--kt-ai-fg-on-fill);
+}
+.kt-ai-checkbox input:disabled { opacity: .45; cursor: not-allowed; }
+/* Цель клика — вся ячейка, а не 16px: попасть в 16px мышью тяжело (закон Фиттса). */
+.kt-ai-table td:has(> .kt-ai-checkbox) .kt-ai-checkbox { width: 100%; height: 100%; justify-content: center; }
+/* Сенсорная цель чекбокса задаётся общим правилом-порогом в конце файла: держать
+   её здесь значило определить одно и то же в двух местах и разными числами. */
+
+.kt-ai-switch { position: relative; display: inline-block; width: 34px; height: 20px; flex-shrink: 0; }
+/* Свитч сам по себе — только трек 34px. Подпись рядом с ним требовала ручной вёрстки,
+   и две подписи наезжали друг на друга. .kt-ai-switch-row даёт готовую строку. */
+.kt-ai-switch-row { display: flex; align-items: center; gap: var(--kt-ai-space-5); width: 100%; padding: var(--kt-ai-space-3) 0; font-size: var(--kt-ai-text-sm); cursor: pointer; }
+.kt-ai-switch-row .kt-ai-switch { order: 2; margin-left: auto; }
+.kt-ai-switch-row > span:not(.track) { order: 1; }
+.kt-ai-switch input { opacity: 0; width: 0; height: 0; }
+.kt-ai-switch .track { position: absolute; inset: 0; background: var(--kt-ai-bg-active); border: 1px solid var(--kt-ai-border-strong); border-radius: var(--kt-ai-radius-full); transition: background var(--kt-ai-dur-base) var(--kt-ai-ease-standard); }
+.kt-ai-switch .track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--kt-ai-fg-muted); transition: transform var(--kt-ai-dur-base) var(--kt-ai-ease-standard), background var(--kt-ai-dur-base); }
+.kt-ai-switch input:checked + .track { background: var(--kt-ai-primary); border-color: var(--kt-ai-primary); }
+.kt-ai-switch input:checked + .track::after { transform: translateX(14px); background: var(--kt-ai-fg-on-fill); }
+
+/* ---------- Навигация ---------- */
+.kt-ai-nav-item {
+  position: relative;
+  display: flex; align-items: center; gap: var(--kt-ai-space-4);
+  height: var(--kt-ai-nav-row);
+  padding: 0 var(--kt-ai-space-4);
+  border-radius: var(--kt-ai-radius-lg);
+  color: var(--kt-ai-fg-muted);
+  font-size: var(--kt-ai-text-sm);
+  cursor: pointer;
+  transition: background var(--kt-ai-dur-fast) var(--kt-ai-ease-standard), color var(--kt-ai-dur-fast);
+}
+.kt-ai-nav-item:hover { background: var(--kt-ai-bg-hover); color: var(--kt-ai-fg); }
+.kt-ai-nav-item[data-active="true"] { background: var(--kt-ai-bg-active); color: var(--kt-ai-fg); }
+.kt-ai-nav-item[data-active="true"]::before { content: ""; position: absolute; left: 0; top: 22%; bottom: 22%; width: 2px; border-radius: var(--kt-ai-radius-full); background: var(--kt-ai-primary); }
+.kt-ai-nav-item .count { margin-left: auto; font-family: var(--kt-ai-font-sans); font-size: var(--kt-ai-text-2xs); color: var(--kt-ai-fg-faint); font-variant-numeric: tabular-nums;}
+/* v5.8.0: счётчик в ДВА значения — «сколько всего / сколько уже сделано».
+   Одним приглушённым цветом это читается как одно число с косой чертой, и
+   продукт подставлял вместо счётчика свою строку, чтобы выделить «сделано»
+   тоном. Разные тона — не украшение: они и есть разница между «объём работы» и
+   «мой прогресс», за которой пользователь и смотрит на пункт меню.
+   Класс живёт отдельно от .count и годится не только в меню (вкладка, заголовок
+   секции): пара «всего/сделано» есть везде, где работу разбирают. */
+.kt-ai-count-split { display: inline-flex; align-items: baseline; gap: 1px; font-family: var(--kt-ai-font-sans); font-size: var(--kt-ai-text-2xs); color: var(--kt-ai-fg-faint); font-variant-numeric: tabular-nums; }
+.kt-ai-nav-item .kt-ai-count-split { margin-left: auto; }
+.kt-ai-count-split .sep { opacity: .7; }
+.kt-ai-count-split .done { color: var(--kt-ai-status-ok-fg); font-weight: var(--kt-ai-weight-semibold); }
+
+/* v6.3.0: заголовок группы разделов.
+   Тринадцать пунктов подряд читаются как список ссылок, а не как устройство
+   продукта. Заголовок — НЕ пункт: он не кликается, не получает фокус и не
+   участвует в нумерации разделов (переход идёт по индексу пункта). Поэтому он
+   и оформлен не как пункт — без высоты ряда, без фона, кеглем подписи. */
+.kt-ai-nav-group {
+  padding: var(--kt-ai-space-6) var(--kt-ai-space-4) var(--kt-ai-space-2);
+  font-size: var(--kt-ai-text-2xs); font-weight: var(--kt-ai-weight-medium);
+  color: var(--kt-ai-fg-faint); letter-spacing: .02em;
+}
+/* Первый заголовок стоит под шапкой сайдбара — отбивать его сверху нечем. */
+.kt-ai-nav-group:first-child { padding-top: var(--kt-ai-space-2); }
+
+.kt-ai-brand-row { display: flex; align-items: center; gap: var(--kt-ai-space-4); color: var(--kt-ai-fg); font-weight: var(--kt-ai-weight-bold); }
+.kt-ai-brand-row img { width: 22px; height: 22px; object-fit: contain; }
+
+/* v4.0: на телефоне поиск уходит – топбару нечем дышать */
+@media (max-width: 639.98px) { .kt-ai-search, .kt-ai-search-field { display: none; } }
+.kt-ai-search {
+  width: 100%; max-width: 320px; height: var(--kt-ai-control-h-sm);
+  padding: 0 var(--kt-ai-space-4);
+  background: var(--kt-ai-bg-elevated);
+  border: 1px solid var(--kt-ai-border);
+  border-radius: var(--kt-ai-radius-lg);
+  box-shadow: none;
+  color: var(--kt-ai-fg);
+  font-size: var(--kt-ai-text-sm);
+}
+.kt-ai-search:focus { outline: none; border-color: var(--kt-ai-primary); box-shadow: var(--kt-ai-focus-shadow); }
+
+/* ---------- Поиск в шапке: поле + подсказка сочетания ----------
+   v6.5.0. Подсказка «⌘K» жила текстом ВНУТРИ placeholder: «Поиск…  ⌘K».
+   Из-за этого её нельзя было ни убрать, ни перевести на Ctrl, ни отличить от
+   собственно подсказки поля — а на проде она занимала место, которого в шапке
+   нет. Теперь это элемент, а не строка: показывается там, где сочетание
+   действительно работает, и убирается там, где не нужно.
+
+   Обёртка нужна, чтобы бейдж стоял ВНУТРИ поля и не съезжал при изменении
+   ширины. Голый .kt-ai-search продолжает работать без обёртки — им набраны
+   фильтры над таблицами, у которых никакого сочетания нет. */
+.kt-ai-search-field { position: relative; display: inline-flex; align-items: center; width: 100%; max-width: 320px; }
+.kt-ai-search-field .kt-ai-search { max-width: none; }
+/* Место под бейдж освобождается только когда бейдж есть: иначе текст запроса
+   упирался бы в пустоту справа. */
+.kt-ai-search-field[data-shortcut="true"] .kt-ai-search { padding-right: var(--kt-ai-space-11); }
+.kt-ai-search-field .kt-ai-kbd { position: absolute; right: var(--kt-ai-space-3); pointer-events: none; }
+
+/* Компактный вариант: поле уступает место остальной шапке.
+   Бейдж в нём не показывается — 176px это ширина запроса, а не запроса с
+   подписью; сочетание при этом продолжает работать, просто о нём не написано
+   в поле (оно названо в title кнопки/поля). */
+.kt-ai-search-field[data-compact="true"] { max-width: 176px; }
+.kt-ai-search-field[data-compact="true"] .kt-ai-kbd { display: none; }
+.kt-ai-search-field[data-compact="true"] .kt-ai-search { padding-right: var(--kt-ai-space-4); }
+
+.kt-ai-kbd {
+  display: inline-flex; align-items: center;
+  padding: 1px var(--kt-ai-space-3);
+  background: var(--kt-ai-bg-active);
+  border: 1px solid var(--kt-ai-border);
+  border-radius: var(--kt-ai-radius-sm);
+  font-family: var(--kt-ai-font-mono);
+  font-size: var(--kt-ai-text-2xs);
+  color: var(--kt-ai-fg-muted);
+}
+
+/* ---------- Tabs / Segmented ---------- */
+.kt-ai-tabs { display: flex; gap: var(--kt-ai-space-1); border-bottom: 1px solid var(--kt-ai-border); }
+.kt-ai-tab { padding: var(--kt-ai-space-4) var(--kt-ai-space-5); font-size: var(--kt-ai-text-sm); color: var(--kt-ai-fg-muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color var(--kt-ai-dur-fast); }
+.kt-ai-tab:hover { color: var(--kt-ai-fg); }
+.kt-ai-tab[data-active="true"] { color: var(--kt-ai-primary); border-bottom-color: var(--kt-ai-primary); font-weight: var(--kt-ai-weight-medium); }
+.kt-ai-tab .count { font-family: var(--kt-ai-font-sans); font-size: var(--kt-ai-text-2xs); color: var(--kt-ai-fg-faint); margin-left: var(--kt-ai-space-2); font-variant-numeric: tabular-nums;}
+
+.kt-ai-segmented { display: inline-flex; gap: 2px; background: var(--kt-ai-bg-soft); border: 1px solid var(--kt-ai-border); border-radius: var(--kt-ai-radius-xl); padding: 2px; }
+.kt-ai-segmented .seg { padding: var(--kt-ai-space-2) var(--kt-ai-space-5); font-size: var(--kt-ai-text-xs); color: var(--kt-ai-fg-muted); border-radius: var(--kt-ai-radius-lg); cursor: pointer; border: none; background: transparent; transition: background var(--kt-ai-dur-fast), color var(--kt-ai-dur-fast); }
+.kt-ai-segmented .seg[data-active="true"] { background: var(--kt-ai-bg-active); color: var(--kt-ai-fg); font-weight: var(--kt-ai-weight-medium); }
+
+/* ---------- Карточки и ряды ---------- */
+.kt-ai-card {
+  background: var(--kt-ai-card-bg);
+  border: 1px solid var(--kt-ai-card-border);
+  border-radius: var(--kt-ai-radius-3xl);
+  box-shadow: var(--kt-ai-card-shadow);
+  padding: var(--kt-ai-pad-card);
+  transition: border-color var(--kt-ai-dur-fast) var(--kt-ai-ease-standard), box-shadow var(--kt-ai-dur-fast) var(--kt-ai-ease-standard);
+}
+/* v5.7.7: отклик на курсор — только у карточки, по которой можно щёлкнуть.
+   Раньше подсвечивались ВСЕ карточки, включая обычные секции текста и таблиц:
+   курсор обещал действие, которого нет, и специалист щёлкал по разделу
+   документа в ожидании перехода. Кликабельная карточка помечается
+   `kt-ai-hover-lift` (или сама является ссылкой/кнопкой) — там отклик и живёт.
+   Принцип «Обратная связь: причинность и польза»: отклик добавляется там, где
+   он что-то значит, а не на каждый чих. */
+.kt-ai-card.kt-ai-hover-lift:hover,
+.kt-ai-card[data-clickable="true"]:hover,
+a.kt-ai-card:hover,
+button.kt-ai-card:hover { border-color: var(--kt-ai-card-border-hover); box-shadow: var(--kt-ai-card-shadow-hover); }
+.kt-ai-card[data-glow="strong"] { background: var(--kt-ai-card-bg-glow); }
+
+.kt-ai-row {
+  display: flex; align-items: center; gap: var(--kt-ai-space-5);
+  padding: var(--kt-ai-space-4) var(--kt-ai-space-5);
+  border-radius: var(--kt-ai-radius-lg);
+  font-size: var(--kt-ai-text-sm);
+  transition: background var(--kt-ai-dur-fast) var(--kt-ai-ease-standard);
+}
+.kt-ai-row:hover { background: var(--kt-ai-bg-hover); }
+.kt-ai-row[data-active="true"] { background: var(--kt-ai-bg-active); }
+.kt-ai-row .meta { font-size: var(--kt-ai-text-2xs); color: var(--kt-ai-fg-muted); }
+.kt-ai-row .end { margin-left: auto; display: flex; align-items: center; gap: var(--kt-ai-space-4); }
+
+.kt-ai-divider { height: 1px; background: var(--kt-ai-divider); border: none; margin: var(--kt-ai-space-5) 0; }
+
+/* ---------- Chips / Status ---------- */
+.kt-ai-chip {
+  display: inline-flex; align-items: center; gap: var(--kt-ai-space-3);
+  white-space: nowrap; word-break: normal; overflow-wrap: normal;
+  padding: 1px var(--kt-ai-space-4);
+  border-radius: var(--kt-ai-radius-tag);
+  font-size: var(--kt-ai-text-2xs);
+  background: var(--kt-ai-chip-default-bg);
+  color: var(--kt-ai-chip-default-fg);
+  white-space: nowrap;
+}
+.kt-ai-chip[data-tone="gray"]   { background: var(--kt-ai-chip-gray-bg);   color: var(--kt-ai-chip-gray-fg); }
+.kt-ai-chip[data-tone="green"]  { background: var(--kt-ai-chip-green-bg);  color: var(--kt-ai-chip-green-fg); }
+.kt-ai-chip[data-tone="orange"] { background: var(--kt-ai-chip-orange-bg); color: var(--kt-ai-chip-orange-fg); }
+.kt-ai-chip[data-tone="blue"]   { background: var(--kt-ai-chip-blue-bg);   color: var(--kt-ai-chip-blue-fg); }
+.kt-ai-chip[data-tone="purple"] { background: var(--kt-ai-chip-purple-bg); color: var(--kt-ai-chip-purple-fg); }
+/* v4.0: чип агента отличим мгновенно – орб-точка (принцип «магия видима») */
+.kt-ai-chip[data-ai="true"] { border: 1px solid var(--kt-ai-border); background: var(--kt-ai-bg-elevated); }
+.kt-ai-chip[data-ai="true"]::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--kt-ai-ai-orb); flex-shrink: 0; }
+.kt-ai-chip[data-tone="red"]    { background: var(--kt-ai-chip-red-bg);    color: var(--kt-ai-chip-red-fg); }
+
+.kt-ai-status-pill {
+  display: inline-flex; align-items: center; gap: var(--kt-ai-space-3);
+  /* nowrap запрещает перенос по пробелу, но ячейка таблицы задаёт
+     word-break: break-word — и он рвёт слово ПОСЕРЕДИНЕ: «рассмотрени/и».
+     Поэтому сбрасываем перенос по буквам явно. То же у .kt-ai-chip. */
+  white-space: nowrap; word-break: normal; overflow-wrap: normal;
+  padding: 1px var(--kt-ai-space-4);
+  border-radius: var(--kt-ai-radius-tag);
+  font-size: var(--kt-ai-text-2xs);
+  font-weight: var(--kt-ai-weight-medium);
+}
+.kt-ai-status-pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.kt-ai-status-pill[data-status="ok"]   { background: var(--kt-ai-status-ok-bg);   color: var(--kt-ai-status-ok-fg); }
+.kt-ai-status-pill[data-status="warn"] { background: var(--kt-ai-status-warn-bg); color: var(--kt-ai-status-warn-fg); }
+.kt-ai-status-pill[data-status="risk"] { background: var(--kt-ai-status-risk-bg); color: var(--kt-ai-status-risk-fg); }
+.kt-ai-status-pill[data-status="info"] { background: var(--kt-ai-status-info-bg); color: var(--kt-ai-status-info-fg); }
+/* muted был только в React-версии компонента — добавлен, чтобы обе реализации
+   принимали один набор статусов и React мог опираться на класс ДС. */
+.kt-ai-status-pill[data-status="muted"] { background: var(--kt-ai-bg-active); color: var(--kt-ai-fg-muted); }
+
+.kt-ai-avatar {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: var(--kt-ai-radius-lg);
+  background: var(--kt-ai-bg-active); color: var(--kt-ai-fg-muted);
+  font-size: var(--kt-ai-text-2xs); font-weight: var(--kt-ai-weight-bold);
+  border: 1px solid var(--kt-ai-border); overflow: hidden; flex-shrink: 0;
+}
+.kt-ai-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+/* ---------- Banner / Callout ---------- */
+.kt-ai-banner {
+  display: flex; gap: var(--kt-ai-space-4); align-items: flex-start;
+  padding: var(--kt-ai-space-4) var(--kt-ai-space-5);
+  border-radius: var(--kt-ai-radius-lg);
+  font-size: var(--kt-ai-text-sm);
+  border: 1px solid transparent;
+}
+.kt-ai-banner[data-tone="info"] { background: var(--kt-ai-status-info-bg); color: var(--kt-ai-status-info-fg); }
+.kt-ai-banner[data-tone="warn"] { background: var(--kt-ai-status-warn-bg); color: var(--kt-ai-status-warn-fg); }
+.kt-ai-banner[data-tone="risk"] { background: var(--kt-ai-status-risk-bg); color: var(--kt-ai-status-risk-fg); }
+.kt-ai-banner[data-tone="ok"]   { background: var(--kt-ai-status-ok-bg);   color: var(--kt-ai-status-ok-fg); }
+
+/* ---------- Вывод раздела ----------
+   Противовес баннера, а не его вариант. Баннер стоит НАД числами и говорит,
+   из-за чего число соврёт: это предупреждение, поэтому он окрашен тоном и
+   виден раньше данных. Вывод стоит ПОСЛЕ таблицы и говорит, что из данных
+   следует: разбор смещения выборки, оговорка о методике, ответ на вопрос
+   раздела. Читают его, когда числа уже посмотрели.
+
+   Отсюда разница в оформлении, и она смысловая: у вывода нет цвета статуса
+   (ему нечего сигналить), есть только линия сверху — граница «данные
+   кончились, начинается их чтение», — и мера строки. Пока слота не было,
+   вывод уходил в баннер, и абзац текста вставал ДО первого числа. */
+.kt-ai-conclusion {
+  margin-top: var(--kt-ai-stack-group);
+  padding-top: var(--kt-ai-space-6);
+  border-top: 1px solid var(--kt-ai-border);
+}
+.kt-ai-conclusion .title {
+  display: block;
+  font-size: var(--kt-ai-text-sm); font-weight: var(--kt-ai-weight-semibold);
+  color: var(--kt-ai-fg); margin-bottom: var(--kt-ai-space-3);
+}
+/* Мера строки: вывод — сплошной текст, и во всю ширину монитора он нечитаем
+   (то же правило, по которому renderCustom() сужает текстовый экран). */
+.kt-ai-conclusion .text {
+  display: block; max-width: 78ch;
+  font-size: var(--kt-ai-text-sm); line-height: 1.6; color: var(--kt-ai-fg-muted);
+  text-wrap: pretty;
+}
+.kt-ai-conclusion .text + .text { margin-top: var(--kt-ai-space-4); }
+
+/* ---------- KPI ---------- */
+.kt-ai-kpi-strip { display: flex; gap: var(--kt-ai-space-8); padding: var(--kt-ai-space-5) 0; flex-wrap: wrap; align-items: stretch; }
+/* v3.3 (референс ElevenLabs): подпись НАД значением; значение — sans с табличными цифрами, не гигантский моно */
+.kt-ai-kpi { display: flex; flex-direction: column; gap: var(--kt-ai-space-1); justify-content: flex-start; }
+/* Подпись всегда НАД значением (правило PRINCIPLES) — независимо от порядка в разметке.
+   Раньше стоял column-reverse: он молча переворачивал написанное, поэтому интуитивный
+   порядок (label, затем value) давал раскладку ПРОТИВ правила ДС. Рантайм пишет
+   value первым, ручная вёрстка — обычно label первым; теперь верны оба. */
+.kt-ai-kpi .label { order: 1; }
+.kt-ai-kpi .value { order: 2; }
+.kt-ai-kpi .value { font-family: var(--kt-ai-font-sans); font-size: var(--kt-ai-text-xl); font-weight: var(--kt-ai-weight-semibold); color: var(--kt-ai-fg); font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.kt-ai-kpi .value[data-long="true"] { font-size: var(--kt-ai-text-lg); line-height: 1.3; }
+.kt-ai-kpi .label { font-size: var(--kt-ai-text-2xs); color: var(--kt-ai-fg-muted); }
+/* v5.7.6: третий уровень — уточнение ПОД значением (знаменатель, доля, период).
+   Раньше продукты добавляли его руками через order:3 и класс meta: раскладка
+   плашки жила в приложениях, и одинаковые полосы выглядели по-разному.
+   Значение всегда идёт сразу за подписью — карточки полосы читаются как один
+   ряд величин; прижимать значение к низу нельзя, иначе в соседних карточках
+   (с уточнением и без) числа встают на разной высоте и кажутся разными по
+   важности. */
+.kt-ai-kpi .hint { order: 3; font-size: var(--kt-ai-text-2xs); color: var(--kt-ai-fg-muted); }
+/* v6.3.0: четвёртый уровень — СНОСКА. Уточнение (`hint`) отвечает «из чего
+   считано» и живёт в 40 знаках: знаменатель, доля, период. Сноска отвечает на
+   другой вопрос — «чем это число НЕ является»: поле-источник меряет не ровно
+   то, чем показатель назван, и сказать это надо рядом с числом, потому что
+   полосу плиток видят все, а карточку строки открывают не все.
+
+   Оговорки такой длины (34–203 знака) в 40 знаков не влезают, а в баннер над
+   числами не помещаются по смыслу. Поэтому сноска — отдельное поле без
+   потолка. Отделяет её от собственных чисел плитки линия, а не блёклость:
+   цвет тот же fg-muted, что у уточнения (7,1:1 в светлой теме и 6,5:1 в
+   тёмной). Тише было бы логично по иерархии и неверно по делу — fg-faint даёт
+   4,9:1 на кегле 11px, а сноска существует затем, чтобы её ПРОЧИТАЛИ. По той
+   же причине она не прячется под клик: спрятанное читают не все, ровно как
+   карточку строки. */
+.kt-ai-kpi .note {
+  order: 4;
+  margin-top: var(--kt-ai-space-2); padding-top: var(--kt-ai-space-2);
+  border-top: 1px solid var(--kt-ai-divider);
+  font-size: var(--kt-ai-text-2xs); line-height: 1.45;
+  color: var(--kt-ai-fg-muted); text-wrap: pretty;
+}
+/* В тихой полосе (flex, без карточек) ширину плитки задаёт её содержимое —
+   сноска растянула бы одну плитку на весь ряд. В сетке карточек ширину задаёт
+   колонка, и потолок не нужен. */
+.kt-ai-kpi-strip:not([data-cards="true"]) .kt-ai-kpi .note { max-width: 30ch; }
+.kt-ai-kpi-strip[data-cards="true"] .kt-ai-kpi { height: 100%; }
+
+
+/* v3.6: слайдер настроек (референс ElevenLabs Settings-панели: Speed/Stability) */
+.kt-ai-slider { appearance: none; width: 100%; height: 3px; border-radius: 2px; background: var(--kt-ai-border-strong); outline-offset: 4px; }
+.kt-ai-slider::-webkit-slider-thumb { appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--kt-ai-primary); border: none; cursor: grab; transition: transform var(--kt-ai-dur-fast); }
+.kt-ai-slider::-webkit-slider-thumb:hover { transform: scale(1.15); }
+.kt-ai-slider::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--kt-ai-primary); border: none; cursor: grab; }
+.kt-ai-slider-row { display: flex; flex-direction: column; gap: var(--kt-ai-space-3); }
+.kt-ai-slider-row .ends { display: flex; justify-content: space-between; font-size: var(--kt-ai-text-2xs); color: var(--kt-ai-fg-faint); }
+
+/* v3.6: адаптивные колонки — двух-панельные архетипы складываются в одну колонку на узком экране */
+.kt-ai-cols { display: grid; gap: var(--kt-ai-space-6); align-items: start; }
+/* v5.8.0: колонка не шире того, что ей отвели. `1fr` — это `minmax(auto, 1fr)`,
+   и `auto` в минимуме означает «не уже своего содержимого»: одна длинная строка,
+   таблица или <pre> внутри распирают колонку, а вместе с ней и страницу. Сворот
+   в одну колонку на ≤720px этого НЕ лечит — единственная колонка растягивается
+   так же. Продукт видел это как горизонтальную прокрутку всей страницы на
+   телефоне (390px экрана против 836px контента) и обходил своей утилитой.
+   min-width:0 у прямых детей снимает минимум по содержимому: длинное теперь
+   переносится или прокручивается ВНУТРИ своего блока, а не выталкивает страницу.
+   Прокрутка широкого (таблицы) остаётся у .kt-ai-table-wrap — там ей и место. */
+.kt-ai-cols > * { min-width: 0; }
+@media (max-width: 719.98px) { .kt-ai-cols { grid-template-columns: 1fr !important; } }
+
+/* v3.9: тактильность – нажатие чувствуется у всего кликабельного, не только у кнопок */
+.kt-ai-suggestion:active, .kt-ai-filter-chip:active, .kt-ai-tab:active { transform: scale(.97); }
+.kt-ai-hover-lift:active { transform: translateY(0) scale(.99); }
+.kt-ai-nav-item:active { transform: scale(.985); }
+.kt-ai-kpi-strip[data-cards="true"] .kt-ai-kpi[data-tab="true"]:active { transform: scale(.985); }
+
+/* v3.5: hover-обратная связь (ElevenLabs) — ряды и кликабельные карточки отвечают на курсор */
+.kt-ai-row-hover { border-radius: var(--kt-ai-radius-md); transition: background var(--kt-ai-dur-fast); }
+.kt-ai-row-hover:hover { background: var(--kt-ai-bg-hover); }
+.kt-ai-hover-lift { transition: border-color var(--kt-ai-dur-fast), box-shadow var(--kt-ai-dur-fast), transform var(--kt-ai-dur-fast); }
+.kt-ai-hover-lift:hover { border-color: var(--kt-ai-border-strong); box-shadow: 0 2px 8px var(--kt-black-a08); transform: translateY(-1px); }
+.kt-ai-chart-card svg circle { transition: opacity var(--kt-ai-dur-fast); }
+.kt-ai-chart-card svg circle:hover { opacity: .75; }
+svg circle[data-map-pt] { transition: r var(--kt-ai-dur-fast); cursor: pointer; }
+svg circle[data-map-pt]:hover { r: 2.3; }
+
+/* v2.5: вариант «стат-карточки» – сетка равных карточек вместо тихой полосы */
+.kt-ai-kpi-strip[data-cards="true"] { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--kt-ai-stack-block); padding: 0; }
+.kt-ai-kpi-strip[data-cards="true"] .kt-ai-kpi {
+  background: var(--kt-ai-card-bg);
+  border: 1px solid var(--kt-ai-card-border);
+  border-radius: var(--kt-ai-radius-2xl);
+  box-shadow: var(--kt-ai-card-shadow);
+  padding: var(--kt-ai-space-6) var(--kt-ai-space-7);
+  gap: var(--kt-ai-space-2);
+}
+.kt-ai-kpi-strip[data-cards="true"] .value { font-size: var(--kt-ai-text-xl); }
+.kt-ai-kpi-strip[data-cards="true"] .value[data-long="true"] { font-size: var(--kt-ai-text-lg); }
+/* KPI-карточка как таб (dashboard): выбранная ведёт чарт — специфичность выше card-правил */
+.kt-ai-kpi-strip[data-cards="true"] .kt-ai-kpi[data-tab="true"] { cursor: pointer; transition: border-color .12s ease, box-shadow .12s ease; }
+.kt-ai-kpi-strip[data-cards="true"] .kt-ai-kpi[data-tab="true"]:hover { border-color: var(--kt-ai-border-strong); }
+.kt-ai-kpi-strip[data-cards="true"] .kt-ai-kpi[data-tab="true"][data-active="true"] { border-color: var(--kt-ai-fg); box-shadow: inset 0 0 0 1px var(--kt-ai-fg), var(--kt-ai-card-shadow); }
+
+/* ---------- Таблицы (frameless ElevenLabs: только горизонтальные разделители рядов, без вертикальных колонок-сепараторов) ----------
+ * Дефолт – full-bleed без внешней рамки. Контейнерный вариант: data-framed="true". */
+.kt-ai-table-wrap { overflow: auto; background: transparent; }
+.kt-ai-table-wrap[data-framed="true"] { border: 1px solid var(--kt-ai-border); border-radius: var(--kt-ai-radius-xl); background: var(--kt-ai-bg); }
+.kt-ai-table-toolbar { display: flex; align-items: center; gap: var(--kt-ai-space-4); padding: var(--kt-ai-space-4) 0; flex-wrap: wrap; }
+.kt-ai-table-wrap[data-framed="true"] .kt-ai-table-toolbar { padding: var(--kt-ai-space-4) var(--kt-ai-space-5); border-bottom: 1px solid var(--kt-ai-border); }
+.kt-ai-table { width: 100%; border-collapse: collapse; font-size: var(--kt-ai-text-sm); }
+.kt-ai-table td { word-break: break-word; }
+/* На узких экранах (≤640px) строки таблицы превращаются в карточки: первая ячейка — заголовок карточки,
+ * остальные — пары «label: value». Без горизонтального скролла (паттерн ElevenLabs/Linear). */
+.kt-ai-table th {
+  text-align: left; padding: var(--kt-ai-space-4) var(--kt-ai-space-5);
+  font-size: var(--kt-ai-text-xs); font-weight: var(--kt-ai-weight-medium);
+  color: var(--kt-ai-fg-muted); /* обязательный контент: faint не проходит контраст */
+  border-bottom: 1px solid var(--kt-ai-divider);
+  white-space: nowrap; position: sticky; top: 0; background: var(--kt-ai-bg);
+}
+.kt-ai-table td { padding: 0 var(--kt-ai-space-5); height: var(--kt-ai-table-row); border-bottom: 1px solid var(--kt-ai-divider); vertical-align: middle; }
+.kt-ai-table tr:last-child td { border-bottom: none; }
+/* Frameless (ElevenLabs): только горизонтальные разделители рядов, без вертикальных колонок-сепараторов (тихо, воздушно) */
+.kt-ai-table tbody tr { transition: background var(--kt-ai-dur-fast); }
+/* ElevenLabs: чекбоксы появляются на hover/выборе, не загромождают */
+.kt-ai-table tbody td:first-child .kt-ai-checkbox { opacity: 0; transition: opacity var(--kt-ai-dur-fast); }
+.kt-ai-table tbody tr:hover td:first-child .kt-ai-checkbox,
+.kt-ai-table tbody td:first-child .kt-ai-checkbox:has(input:checked) { opacity: 1; }
+.kt-ai-table tbody tr:hover { background: var(--kt-ai-bg-hover); }
+.kt-ai-table td.num { font-family: var(--kt-ai-font-sans); font-variant-numeric: tabular-nums; text-align: right; }
+.kt-ai-table[data-density="compact"] td { height: var(--kt-ai-table-row-compact); }
+.kt-ai-table[data-density="relaxed"] td { height: var(--kt-ai-table-row-relaxed); }
+
+/* ---------- Progress ---------- */
+.kt-ai-progress { height: 5px; background: var(--kt-ai-bg-active); border-radius: var(--kt-ai-radius-full); overflow: hidden; }
+.kt-ai-progress > div { height: 100%; background: linear-gradient(90deg, var(--kt-ai-brand-blue), var(--kt-ai-primary)); border-radius: var(--kt-ai-radius-full); transition: width var(--kt-ai-dur-slower) var(--kt-ai-ease-standard); }
+
+/* ---------- Modal ---------- */
+.kt-ai-modal-overlay {
+  position: fixed; inset: 0; background: var(--kt-ai-overlay);
+  display: flex; align-items: center; justify-content: center;
+  z-index: var(--kt-ai-z-modal);
+  animation: ktai-fade var(--kt-ai-dur-base) var(--kt-ai-ease-enter);
+}
+.kt-ai-modal {
+  background: var(--kt-ai-bg-elevated);
+  border: 1px solid var(--kt-ai-border-strong);
+  border-radius: var(--kt-ai-radius-3xl);
+  box-shadow: var(--kt-ai-shadow-xl);
+  width: 520px; max-width: 92vw; max-height: 86vh; overflow-y: auto;
+  padding: var(--kt-ai-space-7);
+  animation: ktai-rise var(--kt-ai-dur-slow) var(--kt-ai-ease-enter);
+}
+.kt-ai-modal .modal-title { font-size: var(--kt-ai-text-lg); font-weight: var(--kt-ai-weight-semibold); margin-bottom: var(--kt-ai-space-5); }
+.kt-ai-modal .modal-actions { display: flex; justify-content: flex-end; gap: var(--kt-ai-space-4); margin-top: var(--kt-ai-space-6); }
+
+/* ---------- Drawer ---------- */
+.kt-ai-drawer {
+  position: fixed; top: 0; right: 0; bottom: 0; width: 420px; max-width: 92vw;
+  background: var(--kt-ai-bg-elevated);
+  border-left: 1px solid var(--kt-ai-border-strong);
+  box-shadow: var(--kt-ai-shadow-lg);
+  z-index: var(--kt-ai-z-drawer);
+  padding: var(--kt-ai-space-7);
+  overflow-y: auto;
+  animation: ktai-slide-in var(--kt-ai-dur-slow) var(--kt-ai-ease-enter);
+}
+
+/* ---------- Документ-артефакт (что продукт производит: ТС, отчёт, СЗ…) ---------- */
+.kt-ai-doc-list { display: flex; flex-direction: column; gap: var(--kt-ai-space-3); }
+.kt-ai-doc { display: flex; align-items: center; gap: var(--kt-ai-space-4); padding: var(--kt-ai-space-4) var(--kt-ai-space-5); background: var(--kt-ai-bg-elevated); border: 1px solid var(--kt-ai-border); border-radius: var(--kt-ai-radius-2xl); }
+.kt-ai-doc .doc-ic { display: inline-grid; place-items: center; width: 36px; height: 36px; flex: 0 0 auto; border-radius: var(--kt-ai-radius-lg); background: var(--kt-ai-bg-soft); color: var(--kt-ai-fg-muted); }
+.kt-ai-doc .doc-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.kt-ai-doc .doc-name { font-size: var(--kt-ai-text-sm); font-weight: var(--kt-ai-weight-medium); color: var(--kt-ai-fg); }
+.kt-ai-doc .doc-sub { font-size: var(--kt-ai-text-xs); color: var(--kt-ai-fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kt-ai-doc .kt-ai-btn { flex: 0 0 auto; }
+.drawer-sec .kt-ai-doc { padding: var(--kt-ai-space-3) var(--kt-ai-space-4); border-radius: var(--kt-ai-radius-lg); }
+.drawer-sec .kt-ai-doc .doc-ic { width: 30px; height: 30px; }
+
+/* ---------- Activity timeline panel (правый слайд-овер: лента активности агента) ---------- */
+.act-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--kt-ai-space-6); }
+.act-head strong { font-size: var(--kt-ai-text-md); font-weight: var(--kt-ai-weight-semibold); }
+.kt-ai-activity { display: flex; flex-direction: column; }
+.act-item { position: relative; padding-left: 22px; padding-bottom: var(--kt-ai-space-6); }
+.act-item::before { content: ""; position: absolute; left: 5px; top: 14px; bottom: 0; width: 1px; background: var(--kt-ai-divider); }
+.act-item:last-child { padding-bottom: 0; }
+.act-item:last-child::before { display: none; }
+.act-dot { position: absolute; left: 0; top: 3px; width: 11px; height: 11px; border-radius: 50%; box-shadow: 0 0 0 2px var(--kt-ai-bg-elevated); }
+.act-title { font-size: var(--kt-ai-text-sm); font-weight: var(--kt-ai-weight-semibold); line-height: var(--kt-ai-leading-tight); }
+.act-time { font-size: var(--kt-ai-text-xs); color: var(--kt-ai-fg-muted); margin-top: 2px; }
+.act-card { margin-top: var(--kt-ai-space-4); border: 1px solid var(--kt-ai-border); border-radius: var(--kt-ai-radius-lg); padding: var(--kt-ai-space-4) var(--kt-ai-space-5); }
+.act-row { display: flex; gap: var(--kt-ai-space-4); font-size: var(--kt-ai-text-xs); margin-bottom: var(--kt-ai-space-2); }
+.act-row .k { color: var(--kt-ai-fg-muted); width: 56px; flex-shrink: 0; }
+.act-row .v { display: flex; flex-wrap: wrap; gap: 4px; }
+.act-summary { font-size: var(--kt-ai-text-sm); color: var(--kt-ai-fg); margin: var(--kt-ai-space-3) 0; line-height: var(--kt-ai-leading-normal); }
+.act-card .kt-ai-btn { margin-top: var(--kt-ai-space-2); }
+
+/* ---------- Toast ---------- */
+.kt-ai-toast-stack { position: fixed; bottom: max(var(--kt-ai-space-7), env(safe-area-inset-bottom)); right: max(var(--kt-ai-space-7), env(safe-area-inset-right)); display: flex; flex-direction: column; gap: var(--kt-ai-space-4); z-index: var(--kt-ai-z-toast); }
+.kt-ai-toast {
+  display: flex; align-items: center; gap: var(--kt-ai-space-4);
+  background: var(--kt-ai-bg-elevated);
+  border: 1px solid var(--kt-ai-border-strong);
+  border-radius: var(--kt-ai-radius-lg);
+  box-shadow: var(--kt-ai-shadow-md);
+  padding: var(--kt-ai-space-4) var(--kt-ai-space-5);
+  font-size: var(--kt-ai-text-sm);
+  min-width: 260px; max-width: 380px;
+  animation: ktai-rise var(--kt-ai-dur-base) var(--kt-ai-ease-enter);
+}
+.kt-ai-toast::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--kt-ai-primary); flex-shrink: 0; }
+.kt-ai-toast[data-tone="ok"]::before { background: var(--kt-ai-status-ok-fg); }
+.kt-ai-toast[data-tone="warn"]::before { background: var(--kt-ai-status-warn-fg); }
+.kt-ai-toast[data-tone="risk"]::before { background: var(--kt-ai-status-risk-fg); }
+
+/* ---------- Tooltip ---------- */
+/* ВАЖНО: data-tip рисуется через ::after, то есть это СГЕНЕРИРОВАННЫЙ контент.
+   В дереве доступности его нет — диктор подсказку не прочитает. Подсказка
+   объясняет иконку глазам и только им; имя кнопке даёт aria-label, и у
+   icon-only кнопки обязаны быть ОБА (docs/DESIGN.md, CHECKLIST G6).
+   Правило было записано и всё равно нарушено в пяти местах собственной
+   витрины — то есть проза не работает; теперь это проверяет гейт 16. */
+.kt-ai-tooltip { position: relative; }
+.kt-ai-tooltip::after {
+  content: attr(data-tip);
+  position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+  background: var(--kt-ai-bg-elevated); color: var(--kt-ai-fg);
+  border: 1px solid var(--kt-ai-border-strong); border-radius: var(--kt-ai-radius-md);
+  box-shadow: var(--kt-ai-shadow-md);
+  padding: var(--kt-ai-space-2) var(--kt-ai-space-4);
+  font-size: var(--kt-ai-text-2xs); white-space: nowrap;
+  opacity: 0; pointer-events: none;
+  transition: opacity var(--kt-ai-dur-fast) var(--kt-ai-ease-standard);
+  z-index: var(--kt-ai-z-tooltip);
+}
+.kt-ai-tooltip:hover::after,
+.kt-ai-tooltip:focus-visible::after,
+.kt-ai-tooltip:focus-within::after { opacity: 1; }
+
+/* ---------- Skeleton / Empty ---------- */
+.kt-ai-skeleton {
+  border-radius: var(--kt-ai-radius-md);
+  background: linear-gradient(90deg, var(--kt-ai-bg-active) 25%, var(--kt-ai-bg-hover) 50%, var(--kt-ai-bg-active) 75%);
+  background-size: 200% 100%;
+  animation: ktai-shimmer 1.4s linear infinite;
+  min-height: 12px;
+}
+.kt-ai-empty {
+  display: flex; flex-direction: column; align-items: center; gap: var(--kt-ai-space-4);
+  padding: var(--kt-ai-space-10) var(--kt-ai-space-8);
+  text-align: center; color: var(--kt-ai-fg-muted); font-size: var(--kt-ai-text-sm);
+  border-radius: var(--kt-ai-radius-3xl);
+  background-image: radial-gradient(color-mix(in srgb, currentColor 14%, transparent) 1px, transparent 1.4px);
+  background-size: 14px 14px;
+}
+.kt-ai-empty .title { color: var(--kt-ai-fg); font-weight: var(--kt-ai-weight-semibold); }
+
+/* ---------- Командная палитра ---------- */
+.kt-ai-command {
+  overflow: hidden; animation: ktai-rise var(--kt-ai-dur-slow) var(--kt-ai-ease-enter);
+  background: var(--kt-ai-bg-elevated);
+  border: 1px solid var(--kt-ai-border-strong);
+  border-radius: var(--kt-ai-radius-3xl);
+  box-shadow: var(--kt-ai-command-shadow);
+  width: 560px; max-width: 92vw;
+}
+
+/* ---------- Анимации ---------- */
+@keyframes ktai-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes ktai-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes ktai-slide-in { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes ktai-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+
+/* ============ v2.1 ДОПОЛНЕНИЯ (ревью 2026-06-09) ============ */
+
+/* Оптика Inter и баланс заголовков */
+.kt-ai-app, .kt-ai-shell { font-feature-settings: "cv05", "cv11", "ss01"; }
+.kt-ai-h1, .kt-ai-h2, .kt-ai-h3 { text-wrap: balance; }
+
+/* ---------- Loading-кнопка ---------- */
+.kt-ai-btn[data-loading="true"] { pointer-events: none; position: relative; color: transparent !important; }
+.kt-ai-btn[data-loading="true"]::after {
+  content: ""; position: absolute; left: calc(50% - 7px); top: calc(50% - 7px);
+  width: 14px; height: 14px; border-radius: 50%;
+  border: 2px solid var(--kt-ai-fg-muted); border-top-color: transparent;
+  animation: ktai-spin .7s linear infinite;
+}
+.kt-ai-btn[data-variant="primary"][data-loading="true"]::after { border-color: var(--kt-ai-fg-on-fill); border-top-color: transparent; }
+
+/* ---------- Combobox / multi-select ---------- */
+.kt-ai-combobox { position: relative; }
+.kt-ai-combobox .control {
+  display: flex; flex-wrap: wrap; gap: var(--kt-ai-space-2); align-items: center;
+  min-height: var(--kt-ai-control-h-md); padding: var(--kt-ai-space-2) var(--kt-ai-space-4);
+  background: var(--kt-ai-bg-soft); border: 1px solid var(--kt-ai-border-strong);
+  border-radius: var(--kt-ai-radius-lg); cursor: text;
+  transition: border-color var(--kt-ai-dur-fast), box-shadow var(--kt-ai-dur-fast);
+}
+.kt-ai-combobox .control:focus-within { border-color: var(--kt-ai-primary); box-shadow: var(--kt-ai-focus-shadow); }
+.kt-ai-combobox .control input { flex: 1; min-width: 80px; border: none; background: transparent; color: var(--kt-ai-fg); font: inherit; outline: none; height: 22px; }
+.kt-ai-combobox .menu {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+  background: var(--kt-ai-bg-elevated); border: 1px solid var(--kt-ai-border-strong);
+  border-radius: var(--kt-ai-radius-lg); box-shadow: var(--kt-ai-shadow-md);
+  z-index: var(--kt-ai-z-dropdown); max-height: 240px; overflow-y: auto;
+  padding: var(--kt-ai-space-2); display: none;
+}
+.kt-ai-combobox[data-open="true"] .menu { display: block; animation: ktai-rise var(--kt-ai-dur-base) var(--kt-ai-ease-enter); }
+.kt-ai-combobox .option {
+  display: flex; align-items: center; gap: var(--kt-ai-space-4);
+  padding: var(--kt-ai-space-3) var(--kt-ai-space-4);
+  border-radius: var(--kt-ai-radius-md); font-size: var(--kt-ai-text-sm); cursor: pointer;
+}
+.kt-ai-combobox .option:hover, .kt-ai-combobox .option[data-active="true"] { background: var(--kt-ai-bg-hover); }
+.kt-ai-combobox .option[data-selected="true"]::after { content: "✓"; margin-left: auto; color: var(--kt-ai-primary); font-weight: 700; }
+.kt-ai-chip[data-removable] { padding-right: var(--kt-ai-space-2); }
+.kt-ai-chip .remove { cursor: pointer; opacity: .6; padding: 0 3px; border-radius: 50%; }
+.kt-ai-chip .remove:hover { opacity: 1; background: var(--kt-ai-bg-active); }
+
+/* ---------- Bulk-select bar (возврат из v1) ---------- */
+.kt-ai-table-bulkbar {
+  display: none; align-items: center; gap: var(--kt-ai-space-5);
+  padding: var(--kt-ai-space-3) var(--kt-ai-space-5);
+  background: var(--kt-ai-primary-subtle); border-bottom: 1px solid var(--kt-ai-border);
+  font-size: var(--kt-ai-text-xs); color: var(--kt-ai-fg);
+}
+.kt-ai-table-bulkbar[data-open="true"] { display: flex; animation: ktai-rise var(--kt-ai-dur-base) var(--kt-ai-ease-enter); }
+.kt-ai-table-bulkbar .count { font-family: var(--kt-ai-font-sans); color: var(--kt-ai-primary); font-weight: 600; font-variant-numeric: tabular-nums;}
+
+/* ---------- File upload / dropzone ---------- */
+.kt-ai-dropzone {
+  display: flex; flex-direction: column; align-items: center; gap: var(--kt-ai-space-3);
+  padding: var(--kt-ai-space-8); text-align: center;
+  border: 1.5px dashed var(--kt-ai-border-strong); border-radius: var(--kt-ai-radius-xl);
+  color: var(--kt-ai-fg-muted); font-size: var(--kt-ai-text-sm); cursor: pointer;
+  transition: border-color var(--kt-ai-dur-fast), background var(--kt-ai-dur-fast);
+}
+.kt-ai-dropzone:hover, .kt-ai-dropzone[data-drag="true"] { border-color: var(--kt-ai-primary); background: var(--kt-ai-primary-subtle); color: var(--kt-ai-fg); }
+.kt-ai-file-row {
+  display: flex; align-items: center; gap: var(--kt-ai-space-4);
+  padding: var(--kt-ai-space-3) var(--kt-ai-space-5);
+  border: 1px solid var(--kt-ai-border); border-radius: var(--kt-ai-radius-lg);
+  font-size: var(--kt-ai-text-xs);
+}
+.kt-ai-file-row .size { margin-left: auto; font-family: var(--kt-ai-font-sans); color: var(--kt-ai-fg-faint); font-variant-numeric: tabular-nums;}
+
+/* ---------- Stepper ---------- */
+.kt-ai-stepper { display: flex; align-items: center; gap: var(--kt-ai-space-3); flex-wrap: wrap; }
+.kt-ai-step-item { display: flex; align-items: center; gap: var(--kt-ai-space-3); font-size: var(--kt-ai-text-xs); color: var(--kt-ai-fg-faint); }
+/* Кружок с номером.
+ *
+ * Иконкой это делать нельзя, и вот почему. Наши иконки — штриховые, 1.75 в
+ * сетке 24, и используются на 14–15px. Цифра штрихом внутри штриховой
+ * окружности на таком размере выходит 6–7px высотой при штрихе ~1px: просветы
+ * у 6, 8 и 9 схлопываются, иконка перестаёт читаться. К тому же набор был бы
+ * конечным (1–9), а номера бывают и двузначные.
+ *
+ * Поэтому номер рисуется ТЕКСТОМ в круге: любое число, чёткость на любом
+ * размере, состояния и цвет от токенов.
+ *
+ * Раньше это правило жило внутри степпера как `.kt-ai-step-item .n` и было
+ * недоступно снаружи — продукты рисовали свои кружки заново.
+ *
+ * ИМЯ. Не `.kt-ai-num` — оно уже занято утилитой табличных цифр (см. выше,
+ * рядом с .kt-ai-meta). Второе определение того же класса перебивало первое, и
+ * суммы вроде «562 572 660 ₸» рисовались кружком 22px поверх текста в 17
+ * местах продукта. Один класс — один смысл. */
+.kt-ai-num-badge {
+  width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: var(--kt-ai-font-mono);      /* цифры одной ширины — колонка не пляшет */
+  font-size: var(--kt-ai-text-2xs); font-weight: var(--kt-ai-weight-bold);
+  font-variant-numeric: tabular-nums;
+  border: 1.5px solid var(--kt-ai-border-strong); color: var(--kt-ai-fg-faint);
+  background: transparent;
+  transition: background var(--kt-ai-dur-base) var(--kt-ai-ease-standard),
+              border-color var(--kt-ai-dur-base) var(--kt-ai-ease-standard),
+              color var(--kt-ai-dur-base) var(--kt-ai-ease-standard);
+}
+.kt-ai-num-badge[data-size="sm"] { width: 18px; height: 18px; font-size: 9px; border-width: 1.25px; }
+.kt-ai-num-badge[data-size="lg"] { width: 28px; height: 28px; font-size: var(--kt-ai-text-xs); }
+/* Текущий — заливка: он один на экране и обязан быть найден мгновенно. */
+.kt-ai-num-badge[data-state="current"] { background: var(--kt-ai-primary); border-color: var(--kt-ai-primary); color: var(--kt-ai-fg-on-fill); }
+/* Пройденный — тише текущего, но не тусклее будущих: он уже что-то значит. */
+.kt-ai-num-badge[data-state="done"] { border-color: var(--kt-ai-fg-muted); color: var(--kt-ai-fg-muted); }
+.kt-ai-num-badge[data-tone="ok"] { border-color: var(--kt-ai-status-ok-fg); color: var(--kt-ai-status-ok-fg); }
+.kt-ai-num-badge[data-tone="warn"] { border-color: var(--kt-ai-status-warn-fg); color: var(--kt-ai-status-warn-fg); }
+.kt-ai-num-badge[data-tone="risk"] { border-color: var(--kt-ai-status-risk-fg); color: var(--kt-ai-status-risk-fg); }
+
+/* Степпер пользуется тем же компонентом — определения одного и того же кружка
+   в двух местах неизбежно разъезжаются (уже было с .kt-ai-label). */
+.kt-ai-step-item .n {
+  width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: var(--kt-ai-text-2xs); font-weight: 700;
+  border: 1.5px solid var(--kt-ai-border-strong); color: var(--kt-ai-fg-faint);
+  transition: all var(--kt-ai-dur-base);
+}
+.kt-ai-step-item[data-state="current"] { color: var(--kt-ai-fg); font-weight: 500; }
+.kt-ai-step-item[data-state="current"] .n { background: var(--kt-ai-primary); border-color: var(--kt-ai-primary); color: var(--kt-ai-fg-on-fill); }
+.kt-ai-step-item[data-state="done"] { color: var(--kt-ai-fg-muted); }
+.kt-ai-step-item[data-state="done"] .n { background: var(--kt-ai-status-ok-bg); border-color: transparent; color: var(--kt-ai-status-ok-fg); }
+.kt-ai-step-sep { width: 20px; height: 1px; background: var(--kt-ai-border-strong); flex-shrink: 0; }
+
+/* ---------- Breadcrumbs / Pagination / Сортировка ---------- */
+.kt-ai-breadcrumbs { display: flex; align-items: center; gap: var(--kt-ai-space-3); font-size: var(--kt-ai-text-xs); color: var(--kt-ai-fg-muted); }
+.kt-ai-breadcrumbs a { color: var(--kt-ai-fg-muted); text-decoration: none; }
+.kt-ai-breadcrumbs a:hover { color: var(--kt-ai-fg); }
+.kt-ai-breadcrumbs .sep { color: var(--kt-ai-fg-faint); }
+.kt-ai-breadcrumbs .current { color: var(--kt-ai-fg); }
+
+.kt-ai-pagination { display: flex; gap: 2px; align-items: center; }
+.kt-ai-pagination .page-btn {
+  min-width: var(--kt-ai-control-h-sm); height: var(--kt-ai-control-h-sm);
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0 var(--kt-ai-space-3); border: none; background: transparent;
+  border-radius: var(--kt-ai-radius-md); color: var(--kt-ai-fg-muted);
+  font-size: var(--kt-ai-text-xs); font-family: var(--kt-ai-font-sans); cursor: pointer; font-variant-numeric: tabular-nums;}
+.kt-ai-pagination .page-btn:hover { background: var(--kt-ai-bg-hover); color: var(--kt-ai-fg); }
+.kt-ai-pagination .page-btn[data-active="true"] { background: var(--kt-ai-bg-active); color: var(--kt-ai-fg); font-weight: 600; }
+.kt-ai-pagination .page-btn:disabled, .kt-ai-pagination .page-btn[disabled] { opacity: .4; cursor: default; }
+.table-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--kt-ai-space-4); margin-top: var(--kt-ai-space-5); }
+/* Сводный bar-chart над таблицей (data-drives-form: раскатка во времени вместо охоты по timestamp-колонке) */
+.kt-ai-chart-card { border: 1px solid var(--kt-ai-border); border-radius: var(--kt-ai-radius-2xl); background: var(--kt-ai-bg-elevated); padding: var(--kt-ai-pad-card); margin-bottom: var(--kt-ai-stack-block); }
+.kt-ai-chart-card .cc-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--kt-ai-space-4); margin-bottom: var(--kt-ai-stack-block); }
+.kt-ai-chart-card .cc-title { font-size: var(--kt-ai-text-sm); color: var(--kt-ai-fg-muted); margin-bottom: 2px; }
+.kt-ai-chart-card .cc-total { display: flex; align-items: baseline; gap: var(--kt-ai-space-3); }
+.kt-ai-chart-card .cc-total .num { font-size: var(--kt-ai-text-xl); font-weight: var(--kt-ai-weight-semibold); letter-spacing: -.01em; line-height: 1; }
+.kt-ai-chart-card .cc-total .unit { font-size: var(--kt-ai-text-xs); color: var(--kt-ai-fg-muted); }
+.kt-ai-chart-card .cc-link { background: none; border: none; padding: 0; color: var(--kt-ai-fg-muted); font-size: var(--kt-ai-text-xs); cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+.kt-ai-chart-card .cc-link:hover { color: var(--kt-ai-fg); }
+.kt-ai-chart-card .cc-bars { display: flex; align-items: flex-end; gap: 5px; height: 120px; }
+.kt-ai-chart-card .cc-bar { flex: 1 1 0; min-width: 0; height: 100%; display: flex; align-items: flex-end; }
+.kt-ai-chart-card .cc-bar > i { display: block; width: 100%; min-height: 2px; background: var(--cc-color, var(--kt-ai-chart-blue)); border-radius: var(--kt-ai-radius-sm) var(--kt-ai-radius-sm) 2px 2px; opacity: .85; transition: opacity var(--kt-ai-dur-fast); }
+.kt-ai-chart-card .cc-bar:hover > i { opacity: 1; }
+.kt-ai-chart-card .cc-axis { display: flex; justify-content: space-between; margin-top: var(--kt-ai-space-3); font-size: var(--kt-ai-text-2xs); color: var(--kt-ai-fg-faint); }
+.kt-ai-chart-card .cc-axis-cat span { flex: 1 1 0; min-width: 0; text-align: center; padding: 0 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* ---------- Подсказка значения на диаграмме ----------
+   Не `.kt-ai-tooltip`: та однострочная (`white-space: nowrap`), рисуется через
+   ::after и у края карточки обрезается. Здесь нужен БЛОК — заголовок и до трёх
+   пар «подпись — значение», — и он живёт в <body>, поэтому его не режет
+   overflow карточки. Позиционирует kt-ai-chart-tip.js: развернуть подсказку
+   внутрь у края и удержать её у марки, а не у курсора, средствами CSS нельзя.
+   Числа приходят готовыми от продукта: система отвечает за вид, не за формат. */
+.kt-ai-chart-tip {
+  position: absolute; z-index: var(--kt-ai-z-tooltip);
+  min-width: 132px; max-width: 260px;
+  padding: var(--kt-ai-space-4) var(--kt-ai-space-5);
+  background: var(--kt-ai-bg-elevated);
+  border: 1px solid var(--kt-ai-border-strong);
+  border-radius: var(--kt-ai-radius-lg);
+  box-shadow: var(--kt-ai-shadow-md);
+  color: var(--kt-ai-fg);
+  font-size: var(--kt-ai-text-2xs);
+  line-height: var(--kt-ai-leading-normal);
+  pointer-events: none;
+  animation: ktai-tip-in var(--kt-ai-dur-fast) var(--kt-ai-ease-standard);
+}
+.kt-ai-chart-tip[hidden] { display: none; }
+.kt-ai-chart-tip .tip-title {
+  font-weight: var(--kt-ai-weight-semibold);
+  color: var(--kt-ai-fg);
+}
+.kt-ai-chart-tip .tip-title + .tip-rows { margin-top: var(--kt-ai-space-3); }
+/* Пары «подпись — значение» сеткой: значения прижаты вправо и набраны
+   табличными цифрами, иначе колонка чисел скачет от строки к строке. */
+.kt-ai-chart-tip .tip-rows {
+  display: grid; grid-template-columns: 1fr auto;
+  gap: 2px var(--kt-ai-space-5); margin: 0;
+}
+.kt-ai-chart-tip .tip-rows dt { color: var(--kt-ai-fg-muted); min-width: 0; }
+.kt-ai-chart-tip .tip-rows dd {
+  margin: 0; text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--kt-ai-weight-medium);
+}
+@keyframes ktai-tip-in { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .kt-ai-chart-tip { animation: none; } }
+
+/* Марка с подсказкой — цель наведения И фокуса: диаграмма обязана читаться не
+   только мышью. Выделение и подсказка включаются вместе, а не по отдельности. */
+[data-kt-tip] { cursor: default; }
+[data-kt-tip]:focus-visible { outline: 2px solid var(--kt-ai-focus-ring); outline-offset: 2px; border-radius: var(--kt-ai-radius-sm); }
+.kt-ai-chart-card .cc-bar[data-kt-tip]:hover > i,
+.kt-ai-chart-card .cc-bar[data-kt-tip][data-kt-tip-open="true"] > i { opacity: 1; filter: brightness(1.08); }
+.kt-ai-chart-card svg circle[data-kt-tip][data-kt-tip-open="true"] { opacity: .75; }
+
+/* Гашение терминальных/неактивных строк (status.dim) — активные выделяются */
+.kt-ai-table tr[data-dim="true"] td { opacity: .5; }
+.kt-ai-table tr[data-dim="true"]:hover td { opacity: .72; }
+
+/* Кликабельные сортируемые заголовки (button + иконка + aria-sort) */
+.th-sort { display: inline-flex; align-items: center; gap: 4px; background: none; border: none; font: inherit; color: inherit; cursor: pointer; padding: 0; }
+.th-sort:hover { color: var(--kt-ai-fg); }
+.th-sort .th-sort-ic { width: 13px; height: 13px; opacity: .4; transition: opacity var(--kt-ai-dur-fast); }
+.th-sort:hover .th-sort-ic { opacity: .7; }
+.kt-ai-table thead th[aria-sort] .th-sort { color: var(--kt-ai-primary); }
+.kt-ai-table thead th[aria-sort] .th-sort .th-sort-ic { opacity: 1; }
+.th-sort-ic[data-dir="asc"] { transform: rotate(180deg); }
+.kt-ai-table .kt-ai-sticky-first td:first-child, .kt-ai-table .kt-ai-sticky-first th:first-child { position: sticky; left: 0; background: var(--kt-ai-bg); z-index: 1; }
+
+/* ---------- Diff-view документов ---------- */
+.kt-ai-diff { font-family: inherit; font-size: var(--kt-ai-text-sm); line-height: 1.55; border: 1px solid var(--kt-ai-border); border-radius: var(--kt-ai-radius-lg); overflow: hidden; }
+.kt-ai-diff .line { padding: 2px var(--kt-ai-space-5); white-space: pre-wrap; }
+.kt-ai-diff .line[data-op="add"] { background: var(--kt-ai-status-ok-bg); color: var(--kt-ai-status-ok-fg); }
+.kt-ai-diff .line[data-op="del"] { background: var(--kt-ai-status-risk-bg); color: var(--kt-ai-status-risk-fg); text-decoration: line-through; }
+
+/* ---------- Notification list ---------- */
+.kt-ai-notif-item { display: flex; gap: var(--kt-ai-space-4); align-items: flex-start; padding: var(--kt-ai-space-4) var(--kt-ai-space-5); border-bottom: 1px solid var(--kt-ai-divider); font-size: var(--kt-ai-text-sm); }
+.kt-ai-notif-item:last-child { border-bottom: none; }
+.kt-ai-notif-item::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: transparent; margin-top: 7px; flex-shrink: 0; }
+.kt-ai-notif-item[data-unread="true"]::before { background: var(--kt-ai-primary); }
+.kt-ai-notif-item .time { margin-left: auto; font-size: var(--kt-ai-text-2xs); color: var(--kt-ai-fg-faint); white-space: nowrap; }
+
+/* ---------- Duotone empty-state ---------- */
+.kt-ai-empty .icon-spot {
+  width: 56px; height: 56px; border-radius: 50%;
+  background: var(--kt-ai-primary-subtle); color: var(--kt-ai-primary);
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* ---------- Date input ---------- */
+.kt-ai-input[type="date"], .kt-ai-input[type="datetime-local"] { font-family: var(--kt-ai-font-sans); font-size: var(--kt-ai-text-xs); font-variant-numeric: tabular-nums;}
+
+/* ---------- Card grid (адаптивная сетка карточек) ---------- */
+.kt-ai-card-grid { display: grid; gap: var(--kt-ai-space-5); grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+
+/* ---------- Отзывчивость shell ----------
+ * ≥1024 (bp-lg): полный sidebar 232px
+ * 832..1023:     icon-rail 52px – подписи .nav-label скрываются
+ * <832 (bp-md):  sidebar = overlay-drawer, открывается data-open="true"
+ * Брейкпоинты совпадают с --kt-ai-bp-* (в media var() недоступен) */
+/* Диапазон рейла задан С ДВУХ сторон. Раньше стояло только `max-width: 1023.98`,
+   и политика рейла доставала до выдвижной панели ниже 832px: структурное
+   правило ниже скрывает всё без иконки, а восстановление `.kt-ai-sidebar
+   .nav-label { display: initial }` в мобильном блоке его не перебивало —
+   у структурного правила пять `:not()`, и оно просто специфичнее. В итоге
+   панель во всю ширину экрана показывала колонку значков без единой подписи,
+   хотя место под подписи там есть. Верхняя граница делает диапазон тем, чем
+   он назван в комментарии к брейкпоинтам: 832..1023. */
+@media (min-width: 832px) and (max-width: 1023.98px) {
+  .kt-ai-shell { grid-template-columns: var(--kt-ai-sidebar-collapsed-width) minmax(0, 1fr); }
+
+  /* ПОЛИТИКА РЕЙЛА. В 52px помещается только иконный ряд — и это правило, а не
+     список исключений. Раньше здесь скрывались три известных класса
+     (.nav-label, .count, .brand-label), поэтому любой блок, добавленный
+     продуктом в сайдбар, оставался и раскладывался в колонку букв поверх
+     навигации: замер на 924px давал элементы шириной 0px при высоте до 234px.
+     Перечислять классы бессмысленно — список никогда не догонит разметку
+     продуктов, поэтому правило структурное: показываем то, что несёт иконку.
+
+     Элемент с иконкой (svg или img) внутри остаётся и становится иконной
+     кнопкой. Элемент без иконки в рейле нечем показать — скрывается целиком.
+     Опт-ин: data-rail="keep" оставляет как есть, и за 52px отвечает продукт. */
+  .kt-ai-sidebar :not(:has(svg, img)):not(svg):not(img):not([data-rail="keep"]):not(:has([data-rail="keep"])) { display: none; }
+  .kt-ai-sidebar :is(.kt-ai-nav-item, :has(> svg), :has(> img)) { justify-content: center; padding: 0; }
+}
+
+/* Заголовок группы в полосе значков. Показывать его нечем — в 52px не влезает
+   ни одно слово, а иконки у заголовка нет и быть не должно (иконка сделала бы
+   его похожим на пункт). Поэтому в рейле он становится тем, чем является по
+   сути: разделителем между группами. Опт-ин data-rail="keep" в разметке —
+   иначе структурное правило выше сняло бы его целиком вместе с линией.
+   Диапазон задан с двух сторон: ниже 832px сайдбар — выдвижная панель во всю
+   ширину, там заголовок снова показывается словами. */
+@media (min-width: 832px) and (max-width: 1023.98px) {
+  .kt-ai-sidebar .kt-ai-nav-group {
+    height: 0; overflow: hidden; padding: 0;
+    margin: var(--kt-ai-space-4) var(--kt-ai-space-3);
+    border-top: 1px solid var(--kt-ai-divider);
+  }
+  .kt-ai-sidebar .kt-ai-nav-group:first-child { margin-top: 0; border-top: 0; }
+}
+@media (max-width: 831.98px) {
+  /* Жёсткие гарантии мобильной вёрстки: без горизонтального скролла страницы,
+   * длинные строки переносятся, текстовые флекс-элементы умеют сжиматься */
+  .kt-ai-app, .kt-ai-shell { overflow-x: hidden; }
+  .kt-ai-app .kt-ai-chip, .kt-ai-shell .kt-ai-chip { min-width: 0; }
+  .kt-ai-card, .kt-ai-row, .kt-ai-banner { overflow-wrap: anywhere; }
+  .kt-ai-shell { grid-template-columns: 1fr; }
+  .kt-ai-sidebar {
+    position: fixed; top: 0; left: 0; bottom: 0; width: var(--kt-ai-sidebar-width);
+    transform: translateX(-100%); transition: transform var(--kt-ai-dur-slow) var(--kt-ai-ease-standard);
+    z-index: var(--kt-ai-z-drawer);
+  }
+  .kt-ai-sidebar[data-open="true"] { transform: none; box-shadow: var(--kt-ai-shadow-lg); }
+  .kt-ai-sidebar .nav-label, .kt-ai-sidebar .kt-ai-nav-item .count, .kt-ai-sidebar .brand-label { display: initial; }
+  .kt-ai-sidebar .kt-ai-nav-item { justify-content: flex-start; padding: 0 var(--kt-ai-space-4); }
+  .kt-ai-drawer { width: 100vw; max-width: 100vw; }
+  .kt-ai-work-column, .kt-ai-work-column-wide, .kt-ai-work-column-table { padding-left: var(--kt-ai-space-5); padding-right: var(--kt-ai-space-5); }
+}
+
+@keyframes ktai-spin { to { transform: rotate(360deg); } }
+
+/* ---------- Theme toggle: иконка активной темы едет внутри бегунка ---------- */
+.kt-ai-theme-toggle {
+  position: relative; width: 52px; height: 28px; flex-shrink: 0;
+  border-radius: var(--kt-ai-radius-full); border: 1px solid var(--kt-ai-border-strong);
+  background: var(--kt-ai-bg-active); cursor: pointer; padding: 0;
+  transition: background var(--kt-ai-dur-base), border-color var(--kt-ai-dur-base);
+}
+.kt-ai-theme-toggle:hover { border-color: var(--kt-ai-primary); }
+.kt-ai-theme-toggle[data-mode="dark"] { background: var(--kt-ai-bg-active); }
+.kt-ai-theme-toggle[data-mode="light"] { background: var(--kt-ai-primary-subtle); }
+.kt-ai-theme-toggle .thumb {
+  position: absolute; top: 2px; left: 2px; width: 22px; height: 22px; border-radius: 50%;
+  background: var(--kt-ai-bg-elevated); box-shadow: var(--kt-ai-shadow-sm);
+  display: flex; align-items: center; justify-content: center;
+  transition: transform var(--kt-ai-dur-slow) var(--kt-ai-ease-standard);
+}
+.kt-ai-theme-toggle[data-mode="dark"] .thumb { transform: translateX(24px); }
+.kt-ai-theme-toggle .ic {
+  position: absolute; width: 13px; height: 13px;
+  fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+  transition: opacity var(--kt-ai-dur-base), transform var(--kt-ai-dur-slow) var(--kt-ai-ease-standard);
+}
+.kt-ai-theme-toggle .ic-moon { color: var(--kt-ai-primary); }
+.kt-ai-theme-toggle .ic-sun { color: var(--kt-ai-status-warn-fg); }
+.kt-ai-theme-toggle[data-mode="dark"] .ic-sun { opacity: 0; transform: rotate(90deg) scale(.4); }
+.kt-ai-theme-toggle[data-mode="dark"] .ic-moon { opacity: 1; transform: none; }
+.kt-ai-theme-toggle[data-mode="light"] .ic-moon { opacity: 0; transform: rotate(-90deg) scale(.4); }
+.kt-ai-theme-toggle[data-mode="light"] .ic-sun { opacity: 1; transform: none; }
+.kt-ai-theme-toggle .tic {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  width: 13px; height: 13px;
+  fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round;
+  color: var(--kt-ai-fg-faint);
+  transition: opacity .2s;
+}
+.kt-ai-theme-toggle .tic-sun { left: 7px; }
+.kt-ai-theme-toggle .tic-moon { right: 7px; }
+.kt-ai-theme-toggle[data-mode="dark"] .tic-moon { opacity: 0; }  /* спрятана под бегунком */
+.kt-ai-theme-toggle[data-mode="light"] .tic-sun { opacity: 0; }
+.kt-ai-theme-toggle .thumb { z-index: 1; }
+
+/* ============ v2.1.1 EDGE-КЕЙСЫ ============ */
+
+/* Выделение текста */
+.kt-ai-app ::selection, .kt-ai-shell ::selection { background: var(--kt-ai-selection); }
+
+/* Усечение текста (локализация: каз. строки длиннее) */
+.kt-ai-truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.kt-ai-truncate-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* Firefox-скроллбары */
+.kt-ai-app, .kt-ai-shell { scrollbar-width: thin; scrollbar-color: var(--kt-ai-border-strong) transparent; }
+
+/* Tooltip: позиция и перенос длинного текста */
+.kt-ai-tooltip[data-tip-pos="bottom"]::after { bottom: auto; top: calc(100% + 6px); }
+.kt-ai-tooltip[data-tip-pos="left"]::after { bottom: auto; left: auto; right: calc(100% + 6px); top: 50%; transform: translateY(-50%); }
+.kt-ai-tooltip[data-tip-pos="right"]::after { bottom: auto; left: calc(100% + 6px); top: 50%; transform: translateY(-50%); }
+.kt-ai-tooltip[data-tip-wrap]::after { white-space: normal; max-width: 240px; width: max-content; }
+
+/* Combobox внутри overflow-контейнера обрежется – раскрытие вверх */
+.kt-ai-combobox[data-direction="up"] .menu { top: auto; bottom: calc(100% + 4px); }
+
+/* Windows High Contrast / forced-colors */
+@media (forced-colors: active) {
+  .kt-ai-btn, .kt-ai-input, .kt-ai-select, .kt-ai-textarea, .kt-ai-card, .kt-ai-modal { border: 1px solid ButtonText; }
+  .kt-ai-status-pill, .kt-ai-chip { border: 1px solid ButtonText; }
+}
+
+/* Reduced motion: стоп бесконечным анимациям (длительности-токены уже обнулены) */
+@media (prefers-reduced-motion: reduce) {
+  .kt-ai-skeleton { animation: none; background: var(--kt-ai-bg-active); }
+  .kt-ai-btn[data-loading="true"]::after { animation-duration: 1.5s; } /* спиннер оставляем – это статус, не декорация */
+}
+
+/* Безопасные отступы iOS (notch) для фиксированных элементов */
+
+/* ============ v2.2 ДОПОЛНЕНИЯ (ревью 2026-06-11) ============ */
+
+/* ---------- Topbar: канонический glass-хром ----------
+ * Blur разрешён ТОЛЬКО на sticky-хроме и overlay, в контенте запрещён. */
+.kt-ai-topbar {
+  position: sticky; top: 0; z-index: var(--kt-ai-z-sticky);
+  display: flex; align-items: center; gap: var(--kt-ai-space-5);
+  height: 56px; padding: 0 var(--kt-ai-space-7);
+  background: var(--kt-ai-bg-glass);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--kt-ai-divider);
+}
+.kt-ai-topbar .spacer { flex: 1; }
+
+/* ---------- AI-диалог ----------
+ * Ассистент – полная ширина без пузыря; пользователь – компактный пузырь.
+ * AI-контент всегда атрибутирован (.kt-ai-gen-label). */
+.kt-ai-chat { display: flex; flex-direction: column; gap: var(--kt-ai-space-6); }
+.kt-ai-msg { display: flex; gap: var(--kt-ai-space-4); font-size: var(--kt-ai-text-md); line-height: var(--kt-ai-leading-normal); }
+/* v3.7: орб отправителя у КАЖДОГО сообщения ассистента (интро и ответы идентичны) */
+.kt-ai-msg .msg-orb { width: 28px; height: 28px; border-radius: 50%; background: var(--kt-ai-ai-orb); flex-shrink: 0; margin-top: 1px; }
+/* v3.7: чат со своим скроллом — раскладка статична, растут только сообщения */
+.kt-ai-chat[data-fill="true"] { flex: 1 1 auto; min-height: 0; overflow-y: auto; scroll-behavior: smooth; padding-right: var(--kt-ai-space-2); }
+/* v4.0 (Michelle): пустой диалог – приветствие в оптическом центре, а не сирота в углу */
+.kt-ai-chat[data-fill="true"][data-empty="true"] { justify-content: center; }
+.kt-ai-chat[data-scroll="true"] { max-height: 420px; overflow-y: auto; scroll-behavior: smooth; padding-right: var(--kt-ai-space-2); }
+.kt-ai-msg .body { min-width: 0; max-width: 100%; }
+/* Ответ ассистента — полная ширина без пузыря. Рамка вокруг длинного ответа
+   ничего не сообщает: роль уже закодирована выравниванием и орбом, а карточка
+   внутри карточки диалога — свой же красный флаг. Пузырь остаётся только у
+   пользователя, где реплики короткие и «свой/чужой» читается формой. */
+.kt-ai-msg[data-role="assistant"] .body {
+  max-width: 100%;
+  padding-block: var(--kt-ai-space-3);
+}
+.kt-ai-msg[data-role="user"] { justify-content: flex-end; }
+.kt-ai-msg[data-role="user"] .body {
+  max-width: 76%;
+  background: var(--kt-ai-bg-soft);
+  border: 1px solid var(--kt-ai-border);
+  border-radius: var(--kt-ai-radius-2xl);
+  border-top-right-radius: var(--kt-ai-radius-sm);
+  padding: var(--kt-ai-space-4) var(--kt-ai-space-6);
+}
+.kt-ai-msg[data-streaming="true"] .body::after {
+  content: ""; display: inline-block; width: 8px; height: 14px;
+  margin-left: var(--kt-ai-space-2); vertical-align: -2px;
+  background: var(--kt-ai-ai-gradient); border-radius: var(--kt-ai-radius-xs);
+  animation: ktai-caret 1s steps(2) infinite;
+}
+@keyframes ktai-caret { 50% { opacity: 0; } }
+
+/* Пилюли навыков агента над полем ввода.
+ *
+ * Идея из ai-agent-input (aicss.dev): выбранный навык — не текст, который можно
+ * случайно надкусить бэкспейсом, а объект, удаляемый целиком. Там он вставлен
+ * ВНУТРЬ строки, но это возможно только в contenteditable, а у нас textarea.
+ * Переписывать композер на contenteditable ради этого нельзя: ломается undo,
+ * ввод через IME, вставка из буфера, доступность и мобильные клавиатуры —
+ * слишком дорого за одну возможность. Пилюли живут НАД полем, как вложения:
+ * то же свойство «удаляется целиком», без единого из перечисленных рисков.
+ */
+.kt-ai-prompt-skills {
+  display: flex; flex-wrap: wrap; gap: var(--kt-ai-space-3);
+  width: 100%; padding: 0 var(--kt-ai-space-2) var(--kt-ai-space-3);
+}
+/* Не :empty — он не сработает, если в контейнере остались пробельные узлы от
+   форматирования разметки, а это обычное дело. Проверяем ЭЛЕМЕНТЫ. */
+.kt-ai-prompt-skills:not(:has(*)) { display: none; }
+.kt-ai-prompt-skill {
+  display: inline-flex; align-items: center; gap: var(--kt-ai-space-2);
+  height: 22px; padding: 0 var(--kt-ai-space-2) 0 var(--kt-ai-space-4);
+  border-radius: var(--kt-ai-radius-tag);
+  background: var(--kt-ai-chip-purple-bg); color: var(--kt-ai-chip-purple-fg);
+  font-size: var(--kt-ai-text-2xs); font-weight: var(--kt-ai-weight-medium);
+  white-space: nowrap;
+}
+.kt-ai-prompt-skill button {
+  display: grid; place-items: center; width: 16px; height: 16px;
+  border-radius: var(--kt-ai-radius-full); color: inherit; opacity: .6;
+}
+.kt-ai-prompt-skill button:hover { opacity: 1; background: var(--kt-ai-bg-hover); }
+
+/* Меню slash-команд. Открывается НАД полем: композер обычно стоит внизу экрана,
+   и список, растущий вниз, уехал бы за край. */
+.kt-ai-slash-menu {
+  position: absolute; bottom: calc(100% + var(--kt-ai-space-3)); left: 0;
+  min-width: 260px; max-width: 360px; max-height: 240px; overflow-y: auto;
+  padding: var(--kt-ai-space-3);
+  background: var(--kt-ai-bg-elevated);
+  border: 1px solid var(--kt-ai-border);
+  border-radius: var(--kt-ai-radius-xl);
+  box-shadow: var(--kt-ai-shadow-lg);
+  z-index: var(--kt-ai-z-dropdown);
+}
+.kt-ai-slash-menu[hidden] { display: none; }
+.kt-ai-slash-item {
+  display: flex; flex-direction: column; gap: 1px; width: 100%;
+  padding: var(--kt-ai-space-3) var(--kt-ai-space-4);
+  border-radius: var(--kt-ai-radius-md);
+  text-align: left; font-size: var(--kt-ai-text-sm); color: var(--kt-ai-fg);
+}
+.kt-ai-slash-item:hover,
+.kt-ai-slash-item[data-active="true"] { background: var(--kt-ai-bg-hover); }
+
+.kt-ai-prompt-bar {
+  position: relative;
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--kt-ai-space-3);
+  padding: var(--kt-ai-space-3) var(--kt-ai-space-4);
+  background: var(--kt-ai-bg-soft);
+  border: 1px solid var(--kt-ai-border-strong);
+  border-radius: var(--kt-ai-radius-3xl);
+  transition: border-color var(--kt-ai-dur-fast) var(--kt-ai-ease-standard), box-shadow var(--kt-ai-dur-fast) var(--kt-ai-ease-standard);
+}
+/* AI-сигнатура: тихая градиентная кромка в фокусе (Mono: без тяжёлого ореола) */
+.kt-ai-prompt-bar:focus-within {
+  border-color: transparent;
+  background: linear-gradient(var(--kt-ai-bg-soft), var(--kt-ai-bg-soft)) padding-box,
+              var(--kt-ai-ai-gradient) border-box;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--kt-ai-ai-accent) 12%, transparent);
+}
+.kt-ai-prompt-bar textarea {
+  flex: 1; min-width: 0; border: none; background: transparent; resize: none; outline: none;
+  color: var(--kt-ai-fg); font-family: var(--kt-ai-font-sans); font-size: var(--kt-ai-text-md);
+  line-height: var(--kt-ai-leading-normal);
+  padding: var(--kt-ai-space-3) var(--kt-ai-space-2);
+  min-height: var(--kt-ai-control-h-md); max-height: 160px;
+}
+.kt-ai-prompt-bar textarea::placeholder { color: var(--kt-ai-fg-faint); }
+.kt-ai-prompt-bar[data-busy="true"] { opacity: .7; }
+.kt-ai-prompt-bar[data-busy="true"] textarea { pointer-events: none; }
+.kt-ai-prompt-send {
+  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  width: var(--kt-ai-control-h-md); height: var(--kt-ai-control-h-md);
+  border: none; border-radius: var(--kt-ai-radius-full); cursor: pointer;
+  background: var(--kt-ai-ai-gradient); color: var(--kt-ai-fg-on-ai);
+  box-shadow: inset 0 1px 0 var(--kt-ai-inset-highlight);
+  transition: filter var(--kt-ai-dur-fast) var(--kt-ai-ease-standard), transform 60ms var(--kt-ai-ease-standard);
+}
+.kt-ai-prompt-send:hover { filter: saturate(1.15) brightness(1.06); }
+.kt-ai-prompt-send:active { transform: scale(.94); }
+.kt-ai-prompt-send:disabled { opacity: .4; cursor: default; }
+
+.kt-ai-suggestions { display: flex; flex-wrap: wrap; gap: var(--kt-ai-space-4); }
+.kt-ai-suggestion {
+  display: inline-flex; align-items: center; gap: var(--kt-ai-space-3);
+  padding: var(--kt-ai-space-3) var(--kt-ai-space-5);
+  border: 1px solid var(--kt-ai-border-strong); border-radius: var(--kt-ai-radius-full);
+  background: transparent; color: var(--kt-ai-fg-muted);
+  font-family: var(--kt-ai-font-sans); font-size: var(--kt-ai-text-xs); cursor: pointer;
+  transition: border-color var(--kt-ai-dur-fast), color var(--kt-ai-dur-fast), background var(--kt-ai-dur-fast);
+}
+.kt-ai-suggestion:hover { border-color: var(--kt-ai-primary); color: var(--kt-ai-fg); background: var(--kt-ai-primary-subtle); }
+
+.kt-ai-source-pill {
+  display: inline-flex; align-items: center; gap: var(--kt-ai-space-2);
+  padding: 1px var(--kt-ai-space-4);
+  border-radius: var(--kt-ai-radius-full);
+  background: var(--kt-ai-primary-subtle); color: var(--kt-ai-link);
+  font-size: var(--kt-ai-text-2xs); text-decoration: none;
+  border: 1px solid transparent; white-space: nowrap;
+}
+.kt-ai-source-pill:hover { border-color: var(--kt-ai-primary); }
+
+.kt-ai-gen-label { display: inline-flex; align-items: center; gap: var(--kt-ai-space-2); font-size: var(--kt-ai-text-2xs); color: var(--kt-ai-fg-faint); }
+.kt-ai-gen-label::before {
+  content: ""; width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0;
+  background: var(--kt-ai-ai-orb);
+}
+
+/* AI-вход: кнопка-сигнатура (точка входа Төре/чата) */
+.kt-ai-btn[data-ai="true"] {
+  background: var(--kt-ai-ai-gradient);
+  border-color: transparent;
+  color: var(--kt-ai-fg-on-ai);
+  font-weight: var(--kt-ai-weight-semibold);
+  box-shadow: var(--kt-ai-shadow-sm), inset 0 1px 0 var(--kt-ai-inset-highlight),
+              0 2px 10px color-mix(in srgb, var(--kt-ai-ai-accent) 16%, transparent);
+}
+.kt-ai-btn[data-ai="true"]:hover { background: var(--kt-ai-ai-gradient); filter: saturate(1.15) brightness(1.06); }
+
+/* ---------- Dropdown-меню действий ---------- */
+.kt-ai-menu-anchor { position: relative; display: inline-block; }
+.kt-ai-menu {
+  position: absolute; top: calc(100% + 4px); right: 0; min-width: 180px;
+  background: var(--kt-ai-bg-elevated);
+  border: 1px solid var(--kt-ai-border-strong);
+  border-radius: var(--kt-ai-radius-lg);
+  box-shadow: var(--kt-ai-shadow-md);
+  padding: var(--kt-ai-space-2);
+  z-index: var(--kt-ai-z-dropdown);
+  display: none;
+}
+.kt-ai-menu[data-open="true"] { display: block; animation: ktai-rise var(--kt-ai-dur-base) var(--kt-ai-ease-enter); }
+.kt-ai-menu .item {
+  display: flex; align-items: center; gap: var(--kt-ai-space-4); width: 100%;
+  padding: var(--kt-ai-space-3) var(--kt-ai-space-4);
+  border: none; background: transparent; text-align: left; cursor: pointer;
+  color: var(--kt-ai-fg); font-family: var(--kt-ai-font-sans); font-size: var(--kt-ai-text-sm);
+  border-radius: var(--kt-ai-radius-md);
+}
+.kt-ai-menu .item:hover, .kt-ai-menu .item[data-active="true"] { background: var(--kt-ai-bg-hover); }
+.kt-ai-menu .item[data-danger="true"] { color: var(--kt-ai-danger); }
+.kt-ai-menu .item .kt-ai-kbd { margin-left: auto; }
+.kt-ai-menu .sep { height: 1px; background: var(--kt-ai-divider); margin: var(--kt-ai-space-2) 0; }
+
+/* ---------- Command palette: внутренности (⌘K) ---------- */
+.kt-ai-command-overlay {
+  position: fixed; inset: 0; background: var(--kt-ai-overlay);
+  display: flex; justify-content: center; align-items: flex-start; padding-top: 12vh;
+  z-index: var(--kt-ai-z-modal);
+  animation: ktai-fade var(--kt-ai-dur-base) var(--kt-ai-ease-enter);
+}
+.kt-ai-command .cmd-input {
+  width: 100%; border: none; background: transparent; outline: none;
+  padding: var(--kt-ai-space-5) var(--kt-ai-space-6);
+  color: var(--kt-ai-fg); font-family: var(--kt-ai-font-sans); font-size: var(--kt-ai-text-md);
+  border-bottom: 1px solid var(--kt-ai-divider);
+}
+.kt-ai-command .cmd-input::placeholder { color: var(--kt-ai-fg-faint); }
+.kt-ai-command .cmd-list { max-height: 320px; overflow-y: auto; padding: var(--kt-ai-space-2); }
+.kt-ai-command .cmd-group { padding: var(--kt-ai-space-3) var(--kt-ai-space-4) var(--kt-ai-space-1); font-size: var(--kt-ai-text-2xs); font-weight: var(--kt-ai-weight-semibold); text-transform: uppercase; letter-spacing: .8px; color: var(--kt-ai-fg-faint); }
+.kt-ai-command .cmd-item {
+  display: flex; align-items: center; gap: var(--kt-ai-space-4);
+  padding: var(--kt-ai-space-3) var(--kt-ai-space-4);
+  border-radius: var(--kt-ai-radius-md); cursor: pointer;
+  font-size: var(--kt-ai-text-sm); color: var(--kt-ai-fg);
+}
+.kt-ai-command .cmd-item:hover, .kt-ai-command .cmd-item[data-active="true"] { background: var(--kt-ai-bg-hover); }
+.kt-ai-command .cmd-item .kt-ai-kbd { margin-left: auto; }
+.kt-ai-command .cmd-empty { padding: var(--kt-ai-space-8); text-align: center; color: var(--kt-ai-fg-muted); font-size: var(--kt-ai-text-sm); }
+
+/* ---------- Filter-chips: применённые фильтры над таблицей ---------- */
+.kt-ai-filterbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--kt-ai-space-3); padding: var(--kt-ai-space-3) 0; }
+/* v6.2 (DS-007): внутри стека вертикальный padding снимается — отбивку задаёт
+   стек, как у .kt-ai-disclosure. Пока padding оставался, ступень ритма врала:
+   `tight` (12) превращалась на экране в 12+6+6 = 24, то есть в блоковый зазор,
+   и панель фильтров разъезжалась на два независимых блока. Продукт лечил это
+   своим классом-обёрткой с gap: 0 — ровно тот обход ДС, который канон
+   запрещает. Собственный padding остаётся для бара вне стека (например под
+   тулбаром таблицы), где иначе он прилипнет к содержимому. */
+.kt-ai-v > .kt-ai-filterbar { padding-block: 0; }
+
+/* Панель шага: строка фильтров + строка вкладок под ней — ОДНА вещь.
+   Канонная обёртка, чтобы каждый продукт не изобретал свою: это уже случилось
+   в консолидации (.app-toolbar) и было бы повторено следующим. */
+.kt-ai-toolbar { display: flex; flex-direction: column; gap: var(--kt-ai-stack-tight); }
+.kt-ai-toolbar > .kt-ai-filterbar { padding-block: 0; }
+/* Селект или инпут внутри фильтр-бара — по содержимому, а не на всю строку:
+   width:100% у форм рассчитан на .kt-ai-field, во flex-wrap он выталкивает
+   каждый контрол на отдельную строку, и бар рассыпается в стопку. */
+.kt-ai-filterbar :is(.kt-ai-select, .kt-ai-input) { width: auto; }
+.kt-ai-filter-chip {
+  display: inline-flex; align-items: center; gap: var(--kt-ai-space-2);
+  padding: 2px var(--kt-ai-space-4);
+  border: 1px solid var(--kt-ai-border-strong); border-radius: var(--kt-ai-radius-tag);
+  background: transparent; font-size: var(--kt-ai-text-2xs); color: var(--kt-ai-fg); white-space: nowrap;
+}
+.kt-ai-filter-chip .k { color: var(--kt-ai-fg-muted); font-family: var(--kt-ai-font-sans); }
+.kt-ai-filter-chip .remove { cursor: pointer; opacity: .6; padding: 0 3px; border-radius: 50%; }
+.kt-ai-filter-chip .remove:hover { opacity: 1; background: var(--kt-ai-bg-active); }
+.kt-ai-filterbar .clear-all { border: none; background: transparent; color: var(--kt-ai-fg-muted); font-size: var(--kt-ai-text-2xs); cursor: pointer; padding: 2px var(--kt-ai-space-3); border-radius: var(--kt-ai-radius-sm); }
+.kt-ai-filterbar .clear-all:hover { color: var(--kt-ai-fg); background: var(--kt-ai-bg-hover); }
+/* Активная вкладка-фильтр: выбранная категория обязана быть видимой — иначе
+   пользователь не знает, какой срез читает. */
+.kt-ai-filter-chip[data-active="true"] {
+  background: var(--kt-ai-primary-subtle);
+  border-color: var(--kt-ai-primary);
+  color: var(--kt-ai-primary);
+  font-weight: var(--kt-ai-weight-semibold);
+}
+
+/* ---------- Radio ---------- */
+.kt-ai-radio { display: inline-flex; align-items: center; gap: var(--kt-ai-space-4); font-size: var(--kt-ai-text-sm); cursor: pointer; }
+.kt-ai-radio input { width: 16px; height: 16px; accent-color: var(--kt-ai-primary); }
+.kt-ai-radio-group { display: flex; flex-direction: column; gap: var(--kt-ai-space-3); }
+
+/* ---------- Toast: действие (undo) и закрытие ---------- */
+.kt-ai-toast .action { margin-left: auto; border: none; background: transparent; color: var(--kt-ai-link); font-size: var(--kt-ai-text-xs); font-weight: var(--kt-ai-weight-medium); cursor: pointer; padding: 2px var(--kt-ai-space-3); border-radius: var(--kt-ai-radius-sm); white-space: nowrap; }
+.kt-ai-toast .action:hover { background: var(--kt-ai-bg-hover); }
+.kt-ai-toast .close { border: none; background: transparent; color: var(--kt-ai-fg-faint); cursor: pointer; padding: 2px; border-radius: var(--kt-ai-radius-sm); line-height: 0; flex-shrink: 0; }
+.kt-ai-toast .close:hover { color: var(--kt-ai-fg); }
+.kt-ai-toast .action + .close { margin-left: 0; }
+.kt-ai-toast .close:only-of-type { margin-left: auto; }
+
+/* ---------- Popover: якорный интерактивный слой ---------- */
+.kt-ai-popover-anchor { position: relative; display: inline-block; }
+.kt-ai-popover {
+  position: absolute; top: calc(100% + 4px); left: 0; min-width: 220px;
+  background: var(--kt-ai-bg-elevated);
+  border: 1px solid var(--kt-ai-border-strong);
+  border-radius: var(--kt-ai-radius-lg);
+  box-shadow: var(--kt-ai-shadow-md);
+  padding: var(--kt-ai-space-5);
+  z-index: var(--kt-ai-z-dropdown);
+  display: none;
+}
+.kt-ai-popover[data-open="true"] { display: block; animation: ktai-rise var(--kt-ai-dur-base) var(--kt-ai-ease-enter); }
+.kt-ai-popover[data-align="right"] { left: auto; right: 0; }
+
+/* ---------- Плавающий bulk-bar ---------- */
+.kt-ai-table-bulkbar[data-floating="true"] {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: max(var(--kt-ai-space-8), env(safe-area-inset-bottom));
+  background: var(--kt-ai-bg-elevated);
+  border: 1px solid var(--kt-ai-border-strong);
+  border-radius: var(--kt-ai-radius-full);
+  box-shadow: var(--kt-ai-shadow-lg);
+  padding: var(--kt-ai-space-3) var(--kt-ai-space-6);
+  z-index: var(--kt-ai-z-sticky);
+}
+
+/* ---------- Row actions: тихие действия по hover/focus ---------- */
+.kt-ai-row .actions { margin-left: auto; display: flex; align-items: center; gap: var(--kt-ai-space-2); opacity: 0; transition: opacity var(--kt-ai-dur-fast) var(--kt-ai-ease-standard); }
+.kt-ai-row:hover .actions, .kt-ai-row:focus-within .actions, .kt-ai-row[data-active="true"] .actions { opacity: 1; }
+.kt-ai-table tbody tr .actions { display: flex; align-items: center; gap: var(--kt-ai-space-2); opacity: 0; transition: opacity var(--kt-ai-dur-fast) var(--kt-ai-ease-standard); }
+.kt-ai-table tbody tr:hover .actions, .kt-ai-table tbody tr:focus-within .actions { opacity: 1; }
+
+/* Мобильный card-режим ДОЛЖЕН идти после десктопных правил таблицы:
+   специфичность у них одинаковая, медиазапрос её не повышает, поэтому
+   решает порядок. Раньше блок стоял выше и десктопные height/padding
+   протекали в карточки — ячейки распирало до 48px вместо ~20px. */
+@media (max-width: 639.98px) {
+  .kt-ai-table { min-width: 0; display: block; }
+  .kt-ai-table thead, .kt-ai-table colgroup, .kt-ai-table .cell-select { display: none; }
+  .kt-ai-table tbody { display: block; }
+  .kt-ai-table tr { position: relative; display: block; border: 1px solid var(--kt-ai-border); border-radius: var(--kt-ai-radius-xl); background: var(--kt-ai-bg-elevated); padding: var(--kt-ai-space-4) var(--kt-ai-space-5); margin-bottom: var(--kt-ai-space-4); }
+  .kt-ai-table tr:hover { background: var(--kt-ai-bg-elevated); }
+  .kt-ai-table td { display: flex; align-items: baseline; justify-content: space-between; gap: var(--kt-ai-space-5); border: none; padding: var(--kt-ai-space-2) 0; text-align: right; height: auto; }
+  .kt-ai-table td::before { content: attr(data-label); flex: 0 0 auto; text-align: left; color: var(--kt-ai-fg-muted); font-size: var(--kt-ai-text-xs); font-weight: var(--kt-ai-weight-medium); }
+  /* Без data-label карточный режим оставлял пустую колонку слева, а значение
+     улетало вправо — обычная таблица выглядела сломанной, и подсказки не было.
+     Теперь ячейка без подписи просто выравнивается по левому краю. */
+  .kt-ai-table td:not([data-label])::before { content: none; }
+  .kt-ai-table td:not([data-label]) { justify-content: flex-start; text-align: left; }
+  .kt-ai-table td:nth-child(2) { display: block; padding: 0 40px var(--kt-ai-space-3) 0; margin-bottom: var(--kt-ai-space-2); border-bottom: 1px solid var(--kt-ai-divider); text-align: left; font-weight: var(--kt-ai-weight-semibold); }
+  .kt-ai-table td:nth-child(2)::before { display: none; }
+  .kt-ai-table td:nth-child(2) .cell-sub { font-weight: var(--kt-ai-weight-regular); }
+  .kt-ai-table .row-act { position: absolute; top: var(--kt-ai-space-3); right: var(--kt-ai-space-4); padding: 0; }
+  .kt-ai-table .row-act::before { display: none; }
+  .kt-ai-table .row-kebab { opacity: 1; }
+}
+@media (pointer: coarse) {
+  .kt-ai-row .actions, .kt-ai-table tbody tr .actions { opacity: 1; } /* hover ненадёжен на touch */
+}
+
+/* ============ v2.3 «Aurora × Attio» (2026-06-12) ============ */
+
+/* Трекинг заголовков перенесён в их основные определения выше: держать его
+   отдельным правилом значит определять класс дважды, и правка в основном
+   определении молча не срабатывает. */
+
+/* Mono-голос: технические подписи */
+/* .kt-ai-label отсюда убран: он определялся дважды, и это правило молча
+   перебивало гарнитуру, вес и разрядку из основного определения — правка там
+   не давала эффекта. Всё про label теперь в одном месте, выше. */
+.kt-ai-command .cmd-group { font-family: var(--kt-ai-font-mono); font-weight: var(--kt-ai-weight-medium); letter-spacing: .4px; }
+.kt-ai-notif-item .time { font-family: var(--kt-ai-font-sans); font-variant-numeric: tabular-nums;}
+
+/* Тихая ссылка «Подробнее →» */
+.kt-ai-link[data-arrow] { color: var(--kt-ai-fg-muted); }
+.kt-ai-link[data-arrow]::after { content: " →"; display: inline-block; transition: transform var(--kt-ai-dur-fast) var(--kt-ai-ease-standard); }
+.kt-ai-link[data-arrow]:hover { color: var(--kt-ai-fg); text-decoration: none; }
+.kt-ai-link[data-arrow]:hover::after { transform: translateX(2px); }
+
+/* Dot-grid текстура пустых состояний */
+
+/* Property-row (Attio): детали объекта в drawer/карточке */
+.kt-ai-prop { display: flex; align-items: center; gap: var(--kt-ai-space-4); min-height: 30px; font-size: var(--kt-ai-text-sm); }
+/* Ключ фиксировался на 148px жёстко: на панели 260px это 65% строки, и
+   значению оставалось 70px. Ограничение по доле снимает случай узкой панели,
+   не трогая обычную. */
+.kt-ai-prop .k { display: flex; align-items: center; gap: var(--kt-ai-space-3); flex: 0 0 148px; max-width: 40%; color: var(--kt-ai-fg-muted); font-size: var(--kt-ai-text-xs); }
+.kt-ai-prop .v { min-width: 0; flex: 1 1 auto; overflow-wrap: anywhere; display: flex; align-items: center; gap: var(--kt-ai-space-3); flex-wrap: wrap; }
+.kt-ai-prop .v[data-empty="true"] { color: var(--kt-ai-fg-faint); }
+
+} /* @layer kt-components */
+
+/* ── Сенсорная ширина: цель нажатия 44px (вне @layer — правило-порог) ─────── */
+/* v5.8.0. Правило ДС: на сенсорной ширине (≤768px или указатель coarse) ни один
+   интерактивный элемент не ниже 44px — минимальной цели, в которую попадают
+   пальцем. Цена промаха измеряется не пикселями: рядом стоящие «Принять» и
+   «Отклонить» в 24–32px дают чужое решение, отменять которое придётся отдельным
+   действием.
+   Токены это уже умели (@media pointer:coarse в kt-ai-tokens.css поднимает
+   control-h), но покрывали только те компоненты, что берут высоту из токена. У
+   пилюли-фильтра высоты нет вовсе — она складывается из padding и кегля 11px, и
+   на телефоне оставалась 24px. Условие тоже было одно, `pointer: coarse`: на
+   ноутбуке, суженном до 375px, правило молчало — а проверяют продукт именно так.
+   Порог задаётся ОДНИМ токеном --kt-ai-control-h-touch, а не числом в каждом
+   правиле: иначе «44» разъедется по файлу, как уже было с радиусами.
+   Ширина остаётся по содержимому: цель — высота строки, растягивать пилюли по
+   горизонтали значит ломать плотность списка фильтров. Для квадратных целей
+   (иконка, чекбокс) ставится и min-width. */
+@media (pointer: coarse), (max-width: 767.98px) {
+  .kt-ai-filter-chip,
+  .kt-ai-filterbar .clear-all,
+  .kt-ai-tab,
+  .kt-ai-segmented .seg,
+  .kt-ai-suggestion,
+  .kt-ai-switch-row {
+    min-height: var(--kt-ai-control-h-touch);
+  }
+  /* Крестик внутри пилюли — самостоятельная цель: промах по нему снимает не тот
+     фильтр, и специалист этого не замечает. Высоту он берёт РАСТЯЖЕНИЕМ по
+     пилюле (align-self: stretch), а не своим min-height: иначе 44px крестика
+     складывались бы с рамкой пилюли и та вырастала до 50px — цель выполнена,
+     а список фильтров стал в два раза выше. */
+  .kt-ai-filter-chip .remove {
+    min-width: var(--kt-ai-control-h-touch); align-self: stretch;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .kt-ai-toast .close, .kt-ai-toast .action {
+    min-width: var(--kt-ai-control-h-touch); min-height: var(--kt-ai-control-h-touch);
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .kt-ai-checkbox, .kt-ai-radio { min-height: var(--kt-ai-control-h-touch); min-width: var(--kt-ai-control-h-touch); justify-content: center; }
+  /* Свитч: трек остаётся 34×20 — это индикатор состояния, раздувать его значит
+     менять внешний вид ради цели нажатия. Растёт сама рамка контрола, трек
+     центруется внутри. Через ::after поверх это не решается: невидимая область
+     44px торчала бы за пределы 34px-контрола и добавляла 5px к ширине страницы
+     — правило про цель нажатия породило бы горизонтальную прокрутку, ровно ту,
+     которую чинит T-176. Проверено замером: scrollWidth рос на 5px. */
+  .kt-ai-switch { min-width: var(--kt-ai-control-h-touch); min-height: var(--kt-ai-control-h-touch); }
+  .kt-ai-switch .track {
+    inset: auto; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 34px; height: 20px;
+  }
+
+  /* React-кит размечен утилитами Tailwind, а не классами .kt-ai-*: правила выше
+     до него не достают, и порог пришлось бы дописывать к каждой из ~70 кнопок —
+     то есть заводить 70 мест, где его можно забыть. Поэтому порог задаётся один
+     раз на поддереве кита: [data-kt-ai-kit] ставят KTAIShell и KTScreen.
+     min-height ПОБЕЖДАЕТ height по спецификации CSS — h-7 (28px) от Tailwind
+     остаётся в разметке и просто перестаёт действовать на сенсорной ширине.
+     Порог общий и для продуктового кода внутри оболочки: правило про цель
+     нажатия не делит кнопки на свои и чужие. Осознанное исключение (плотный
+     инлайн-контрол, который обязан быть меньше) помечается data-kt-touch="off" —
+     явным отказом, а не молчанием. */
+  [data-kt-ai-kit] :is(button, a[href], [role="button"], [role="link"], [role="menuitem"], [role="tab"], summary):not([data-kt-touch="off"]) {
+    min-height: var(--kt-ai-control-h-touch);
+  }
+  /* Подложка-ловушка клика (fixed inset-0) — не цель нажатия, а способ поймать
+     промах мимо меню. Порог ей не нужен, а min-height на inset-0 безвреден, но
+     врал бы в замерах: элемент не виден и целью не является. */
+  [data-kt-ai-kit] button[aria-hidden="true"], [data-kt-ai-kit] button[aria-hidden] { min-height: 0; }
+}
+
+/* ── Доступность (вне @layer, чтобы надёжно переопределять) ───────────────── */
+/* Уважать «уменьшить движение»: глушим анимации/переходы, но не ломаем функциональность. */
+@media (prefers-reduced-motion: reduce) {
+  .kt-ai-app *, .kt-ai-app *::before, .kt-ai-app *::after,
+  .kt-ai-toast, .kt-ai-drawer, .kt-ai-menu, .kt-ai-modal, .kt-ai-popover, .kt-ai-command {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+/* Повышенный контраст: толще фокус-кольцо, явные границы и подчёркнутые ссылки. */
+@media (prefers-contrast: more) {
+  .kt-ai-app :focus-visible, .kt-ai-shell :focus-visible { outline-width: 3px; outline-offset: 2px; }
+  .kt-ai-app { --kt-ai-border: var(--kt-ai-border-strong); }
+  .kt-ai-app .kt-ai-link { text-decoration: underline; }
+  .kt-ai-status-pill { outline: 1px solid color-mix(in srgb, currentColor 40%, transparent); }
+}
+/* Меньше прозрачности: blur на sticky-хроме падает, фон становится плотным (легибельность важнее эффекта). */
+@media (prefers-reduced-transparency: reduce) {
+  .kt-ai-topbar { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--kt-ai-bg-elevated); }
+}
+/* Утилита для скринридеров: видимо только для AT (для live-region'ов и подписей). */
+/* Блокировка прокрутки фона, пока открыт модал/drawer.
+   Вешать на <html> (не на body) при открытии оверлея, снимать при закрытии:
+     document.documentElement.classList.toggle('kt-ai-scroll-locked', open)
+   Без этого страница продолжает скроллиться ПОД оверлеем — проверено поведением.
+   Про рывок вбок: на Windows/Linux скроллбар занимает место, и когда он исчезает,
+   контент прыгает. Лечится `scrollbar-gutter: stable` на прокручиваемом элементе —
+   в kt-ai-page.css это уже сделано для страницы; в своём приложении поставь его
+   на тот элемент, который реально скроллится. */
+.kt-ai-scroll-locked { overflow: hidden; }
+
+.kt-ai-sr-only {
+  position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* ============================================================
+   ПРИМИТИВЫ РАСКЛАДКИ — чтобы ДС принимала интерфейсы, которых мы не предвидели.
+   Компоненты покрывают известные случаи; примитивы дают собрать НОВЫЙ экран
+   из шкал системы, а не из инлайн-стилей. Замерено на реальном экране: без них
+   разработчик пишет ~40 инлайновых правил (12 из них — вертикальные отступы),
+   и ритм расходится с системой уже на втором экране.
+   Всё на токенах: правка шкалы в tokens.json меняет раскладку везде.
+   ============================================================ */
+
+/* Вертикальный стек: заменяет marginTop у каждого потомка. */
+.kt-ai-v { display: flex; flex-direction: column; gap: var(--kt-ai-space-6); }
+.kt-ai-v[data-gap="xs"] { gap: var(--kt-ai-space-2); }
+.kt-ai-v[data-gap="sm"] { gap: var(--kt-ai-space-4); }
+.kt-ai-v[data-gap="lg"] { gap: var(--kt-ai-space-8); }
+.kt-ai-v[data-gap="xl"] { gap: var(--kt-ai-space-10); }
+/* v6.1: ступени ритма прямо на стеке. Без них экран группировался только
+   своими классами продукта (`app-stack-*`), а чаще не группировался вовсе:
+   корневой столбец получал один зазор, и панель фильтров, её вкладки и
+   карточки списка расходились на одно и то же расстояние. Равномерность —
+   не ритм: одинаковый зазор на всё говорит «здесь ничто ни с чем не связано». */
+.kt-ai-v[data-gap="tight"]  { gap: var(--kt-ai-stack-tight); }
+.kt-ai-v[data-gap="block"]  { gap: var(--kt-ai-stack-block); }
+.kt-ai-v[data-gap="group"]  { gap: var(--kt-ai-stack-group); }
+.kt-ai-v[data-gap="region"] { gap: var(--kt-ai-stack-region); }
+
+/* Горизонтальный ряд. Не путать с .kt-ai-row — та строка списка со своим паддингом. */
+.kt-ai-h-stack { display: flex; align-items: center; gap: var(--kt-ai-space-4); flex-wrap: wrap; }
+.kt-ai-h-stack[data-gap="xs"] { gap: var(--kt-ai-space-2); }
+.kt-ai-h-stack[data-gap="lg"] { gap: var(--kt-ai-space-6); }
+.kt-ai-h-stack[data-gap="tight"] { gap: var(--kt-ai-stack-tight); }
+.kt-ai-h-stack[data-gap="block"] { gap: var(--kt-ai-stack-block); }
+.kt-ai-h-stack[data-align="start"] { align-items: flex-start; }
+.kt-ai-h-stack[data-align="baseline"] { align-items: baseline; }
+.kt-ai-h-stack[data-nowrap="true"] { flex-wrap: nowrap; }
+/* v5.8.1: ряд, которому запрещено переноситься, в узкой колонке выходит за
+   родителя и толкает горизонтальную прокрутку ВСЕЙ страницы — тот же дефект,
+   что чинил T-176, только источник другой. Замерено на 375px: страница
+   расширялась до 700px.
+   Само `nowrap` этого не лечит и не должно: значение `true` оставлено как есть,
+   потому что прокручиваемый ряд — это НЕ бесплатная надстройка. `overflow-x:
+   auto` по спецификации вынуждает `overflow-y` стать `auto` тоже, а значит ряд
+   начинает обрезать всё, что вылезает вверх и вниз: меню, поповер, подсказку,
+   кольцо фокуса. Ряд с кебаб-кнопкой такой правкой сломался бы молча.
+   Поэтому выбор явный и по имени: `scroll` — ряд прокручивает себя сам,
+   `true` — ряд остаётся под ответственностью автора. */
+.kt-ai-h-stack[data-nowrap="scroll"] {
+  flex-wrap: nowrap; min-width: 0;
+  overflow-x: auto; overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+
+/* Распорка: всё после неё уходит вправо. Заменяет marginLeft:auto. */
+.kt-ai-spacer { margin-left: auto; }
+
+/* Текстовые утилиты — вместо инлайновых fontSize/fontWeight/color. */
+.kt-ai-t-xs   { font-size: var(--kt-ai-text-xs); }
+.kt-ai-t-sm   { font-size: var(--kt-ai-text-sm); }
+.kt-ai-t-md   { font-size: var(--kt-ai-text-md); }
+.kt-ai-t-lg   { font-size: var(--kt-ai-text-lg); }
+.kt-ai-t-xl   { font-size: var(--kt-ai-text-xl); }
+.kt-ai-t-medium   { font-weight: var(--kt-ai-weight-medium); }
+.kt-ai-t-semibold { font-weight: var(--kt-ai-weight-semibold); }
+.kt-ai-t-muted { color: var(--kt-ai-fg-muted); }
+.kt-ai-t-faint { color: var(--kt-ai-fg-faint); }
+.kt-ai-t-nowrap { white-space: nowrap; }
+
+/* Ограничители ширины — колонка чтения и формы. */
+.kt-ai-narrow { max-width: 640px; }
+.kt-ai-prose  { max-width: 68ch; }
+
+/* ============================================================
+   ПОМОЩНИК — боковая панель, а не всплывающий попап.
+   Раньше React-кит рисовал окошко 340px своей вёрсткой на Tailwind, хотя классы
+   чата (.kt-ai-chat/.kt-ai-msg/.kt-ai-prompt-bar/.kt-ai-suggestions) в ДС уже были.
+   Панель во всю высоту — паттерн ElevenLabs/Linear: диалог не перекрывает работу,
+   его видно вместе с экраном, композер закреплён снизу, история скроллится сама.
+   ============================================================ */
+
+/* Кнопка вызова. Отдельный слой от панели: при открытии кнопка не сдвигается. */
+.kt-ai-fab {
+  position: fixed; right: var(--kt-ai-space-7); bottom: var(--kt-ai-space-7);
+  /* Ниже drawer/модалки: на одном слое кнопка накрывала их подвал с действиями. */
+  z-index: var(--kt-ai-z-sticky);
+  display: inline-flex; align-items: center; gap: var(--kt-ai-space-3);
+  height: 40px; padding: 0 var(--kt-ai-space-6);
+  border: 1px solid var(--kt-ai-border); border-radius: var(--kt-ai-radius-full);
+  background: var(--kt-ai-bg-elevated); color: var(--kt-ai-fg);
+  font-size: var(--kt-ai-text-sm); font-weight: var(--kt-ai-weight-medium);
+  box-shadow: var(--kt-ai-shadow-lg); cursor: pointer;
+  transition: background var(--kt-ai-dur-fast) var(--kt-ai-ease-standard), transform var(--kt-ai-dur-fast);
+}
+.kt-ai-fab:hover { background: var(--kt-ai-bg-hover); }
+.kt-ai-fab:active { transform: scale(.97); }
+.kt-ai-fab .orb {
+  width: 16px; height: 16px; border-radius: 50%;
+  background: var(--kt-ai-ai-orb); flex-shrink: 0;
+}
+
+/* Орб агента (kt-ai-orb.js). Цвет НЕ задаётся: скрипт рисует точки
+   currentColor, поэтому орб темизуется теми же токенами, что и текст рядом. */
+.kt-ai-orb { display: block; flex-shrink: 0; color: var(--kt-ai-fg-muted); }
+.kt-ai-orb[data-state="thinking"] { color: var(--kt-ai-fg); }
+
+/* Кнопка агента: только орб, без подписи. Подпись «AI» ничего не добавляла —
+   круглая кнопка в углу и так читается как вход в помощника, а текст делал её
+   шире и заметнее, чем ей положено быть. */
+.kt-ai-fab[data-orb-only="true"] {
+  width: 44px; padding: 0; justify-content: center;
+  gap: 0; height: 44px;
+}
+.kt-ai-fab[data-orb-only="true"] .kt-ai-orb { width: 22px; height: 22px; }
+
+.kt-ai-assistant {
+  position: fixed; top: 0; right: 0; bottom: 0; z-index: var(--kt-ai-z-drawer);
+  width: 400px; max-width: 100vw;
+  display: flex; flex-direction: column;
+  background: var(--kt-ai-bg-elevated);
+  border-left: 1px solid var(--kt-ai-border-strong);
+  box-shadow: var(--kt-ai-shadow-xl);
+  animation: ktai-slide-in var(--kt-ai-dur-slow) var(--kt-ai-ease-enter);
+}
+@keyframes ktai-slide-in { from { transform: translateX(16px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .kt-ai-assistant { animation: none; } }
+
+.kt-ai-assistant-head {
+  display: flex; align-items: center; gap: var(--kt-ai-space-4);
+  padding: var(--kt-ai-space-5);
+  border-bottom: 1px solid var(--kt-ai-border); flex-shrink: 0;
+}
+.kt-ai-assistant-head .orb {
+  width: 26px; height: 26px; border-radius: 50%;
+  background: var(--kt-ai-ai-orb); flex-shrink: 0;
+}
+.kt-ai-assistant .kt-ai-chat { padding: var(--kt-ai-space-5); }
+.kt-ai-assistant-composer { padding: var(--kt-ai-space-5); border-top: 1px solid var(--kt-ai-border); flex-shrink: 0; }
+
+/* На узком экране помощник занимает всю ширину — иначе работать в нём невозможно. */
+@media (max-width: 639.98px) {
+  .kt-ai-assistant { width: 100vw; }
+  .kt-ai-fab { right: var(--kt-ai-space-5); bottom: var(--kt-ai-space-5); }
+}
+
+/* ============================================================
+   РАСКРЫВАЮЩИЙСЯ БЛОК (disclosure) — карточка, которая разворачивается на месте.
+   Зачем: для очередей, где нужно СРАВНИВАТЬ объекты, drawer плох — он закрывает
+   список, теряет контекст и заставляет открывать/закрывать по одному. Раскрытие
+   на месте оставляет соседей видимыми: специалист листает и разбирает подряд.
+   Паттерн Linear/GitHub/Notion.
+
+   Разметка (кнопка — чтобы работали клавиатура и screen reader):
+     <article class="kt-ai-disclosure" data-open="true">
+       <button class="kt-ai-disclosure-head" aria-expanded="true">
+         <svg class="kt-ai-disclosure-chevron">…</svg> …шапка…
+       </button>
+       <div class="kt-ai-disclosure-body">…детали…</div>
+     </article>
+   ============================================================ */
+
+.kt-ai-disclosure {
+  border: 1px solid var(--kt-ai-card-border);
+  border-radius: var(--kt-ai-radius-3xl);
+  background: var(--kt-ai-card-bg);
+  overflow: hidden;
+  transition: border-color var(--kt-ai-dur-base) var(--kt-ai-ease-standard);
+}
+.kt-ai-disclosure:hover { border-color: var(--kt-ai-card-border-hover); }
+.kt-ai-disclosure[data-open="true"] { border-color: var(--kt-ai-border-strong); }
+.kt-ai-disclosure + .kt-ai-disclosure { margin-top: var(--kt-ai-space-4); }
+/* v6.1: внутри стека отбивку задаёт стек. Соседский margin складывался с
+   gap родителя (12 + 8 = 20), и карточки списка расходились ДАЛЬШЕ, чем
+   список от своей панели, — иерархия переворачивалась. Правило соседей
+   оставлено для разметки без стека, где иначе карточки слипнутся. */
+.kt-ai-v > .kt-ai-disclosure + .kt-ai-disclosure { margin-top: 0; }
+
+.kt-ai-disclosure-head {
+  display: flex; align-items: flex-start; gap: var(--kt-ai-space-5);
+  width: 100%; padding: var(--kt-ai-space-6);
+  text-align: left; cursor: pointer;
+  transition: background var(--kt-ai-dur-fast) var(--kt-ai-ease-standard);
+}
+.kt-ai-disclosure-head:hover { background: var(--kt-ai-bg-hover); }
+.kt-ai-disclosure-head:active { background: var(--kt-ai-bg-active); }
+
+/* Шеврон: единственная анимация — transform, как требует гейт G3. */
+.kt-ai-disclosure-chevron {
+  flex-shrink: 0; margin-top: 2px; color: var(--kt-ai-fg-faint);
+  transition: transform var(--kt-ai-dur-base) var(--kt-ai-ease-standard);
+}
+.kt-ai-disclosure[data-open="true"] .kt-ai-disclosure-chevron { transform: rotate(90deg); }
+
+.kt-ai-disclosure-body {
+  padding: var(--kt-ai-space-6);
+  border-top: 1px solid var(--kt-ai-divider);
+  animation: ktai-reveal var(--kt-ai-dur-base) var(--kt-ai-ease-enter);
+}
+@keyframes ktai-reveal { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .kt-ai-disclosure-body { animation: none; }
+  .kt-ai-disclosure-chevron { transition: none; }
+}
+
+/* ---------- Раскрытие на НАТИВНОМ <details> ----------
+   .kt-ai-disclosure выше — на div-ах с data-open, и ему нужен JS. Серверному
+   рантайму (Python/FastAPI в мониторинге качества) и любой странице без
+   скриптов нужен тот же приём без JS, и оба продукта написали его сами: один
+   завёл собственный .full-disclosure с гашением маркера, второй — правило
+   `details > summary { cursor: pointer }`. Одинаковая правка в двух местах
+   независимо друг от друга — это и есть заявка в канон.
+   Браузер сам хранит состояние и сам его переключает; нам остаётся вид. */
+.kt-ai-details {
+  border: 1px solid var(--kt-ai-border);
+  border-radius: var(--kt-ai-radius-xl);
+  background: var(--kt-ai-bg-soft);
+}
+.kt-ai-details > summary {
+  display: flex; align-items: center; gap: var(--kt-ai-space-3);
+  min-height: var(--kt-ai-control-h-lg);
+  padding: 0 var(--kt-ai-space-5);
+  color: var(--kt-ai-fg-muted);
+  font-size: var(--kt-ai-text-xs);
+  font-weight: var(--kt-ai-weight-semibold);
+  cursor: pointer;
+  list-style: none;
+}
+/* Треугольник ОС выглядит чужеродно рядом с волосяными линиями и разный в
+   Safari/Chrome. Гасим его в обеих записях: ::marker — стандарт,
+   ::-webkit-details-marker — Safari, который стандарт ещё не применяет. */
+.kt-ai-details > summary::-webkit-details-marker { display: none; }
+.kt-ai-details > summary::marker { content: ""; }
+.kt-ai-details > summary:hover { color: var(--kt-ai-fg); }
+.kt-ai-details > summary:focus-visible { outline: 2px solid var(--kt-ai-focus-ring); outline-offset: -2px; border-radius: var(--kt-ai-radius-xl); }
+/* Свой шеврон — единственная анимация transform, как требует гейт G3. */
+.kt-ai-details > summary .kt-ai-details-chevron {
+  margin-left: auto; flex-shrink: 0; color: var(--kt-ai-fg-faint);
+  transition: transform var(--kt-ai-dur-base) var(--kt-ai-ease-standard);
+}
+.kt-ai-details[open] > summary .kt-ai-details-chevron { transform: rotate(90deg); }
+.kt-ai-details > :not(summary) {
+  padding: 0 var(--kt-ai-space-5) var(--kt-ai-space-5);
+  color: var(--kt-ai-fg-muted);
+  font-size: var(--kt-ai-text-xs);
+  line-height: var(--kt-ai-leading-normal);
+}
+/* Одиночный <summary> вне .kt-ai-details тоже обязан выглядеть нажимаемым:
+   курсор — единственный признак, по которому видно, что строка раскрывается. */
+.kt-ai-app summary, .kt-ai-shell summary, [data-kt-ai-kit] summary { cursor: pointer; }
+@media (prefers-reduced-motion: reduce) {
+  .kt-ai-details > summary .kt-ai-details-chevron { transition: none; }
+}
+
+/* ---------- Подвал действий боковой панели ----------
+   Панель разбора длинная, а решение принимают внизу: без липкого подвала
+   «Принять» и «Отклонить» уезжают за экран, и специалист скроллит обратно
+   каждый раз. Продукт мониторинга качества дописал это правило СНАРУЖИ, поверх
+   класса ДС (`.kt-ai-drawer .drawer-actions`) — то есть держал чужой внутренний
+   селектор у себя; следующая правка панели сломала бы его молча.
+   Отрицательные поля вытягивают подвал на всю ширину панели, чтобы линия шла
+   от края до края, а не обрывалась по паддингу. */
+.kt-ai-drawer-actions {
+  position: sticky; bottom: 0; z-index: 2;
+  display: flex; align-items: center; gap: var(--kt-ai-space-4);
+  margin: var(--kt-ai-space-6) calc(var(--kt-ai-space-7) * -1) calc(var(--kt-ai-space-7) * -1);
+  padding: var(--kt-ai-space-5) var(--kt-ai-space-7);
+  border-top: 1px solid var(--kt-ai-border);
+  background: var(--kt-ai-bg-elevated);
+  flex-wrap: wrap;
+}
+@media (max-width: 639.98px) {
+  .kt-ai-drawer-actions {
+    margin-left: calc(var(--kt-ai-space-5) * -1); margin-right: calc(var(--kt-ai-space-5) * -1);
+    padding-left: var(--kt-ai-space-5); padding-right: var(--kt-ai-space-5);
+  }
+}
+
+/* Подвал действий внутри раскрытого блока. */
+.kt-ai-disclosure-actions {
+  display: flex; align-items: center; gap: var(--kt-ai-space-4);
+  margin-top: var(--kt-ai-space-6); padding-top: var(--kt-ai-space-5);
+  border-top: 1px solid var(--kt-ai-divider); flex-wrap: wrap;
+}
+
+/* Подложка для боковой панели — НЕ модальная.
+   Drawer открывают, чтобы разобрать объект, не теряя список: гасить экран
+   на 32% чёрного здесь неверно, специалист перестаёт видеть соседние группы.
+   Подложка нужна только чтобы поймать клик мимо панели. */
+.kt-ai-scrim {
+  position: fixed; inset: 0; z-index: var(--kt-ai-z-drawer);
+  background: transparent;
+}
+/* Лёгкое затемнение только под самой панелью — отделяет её от контента,
+   не пряча его. На узком экране панель во всю ширину, подложка не нужна. */
+@media (min-width: 640px) {
+  .kt-ai-scrim { background: color-mix(in srgb, var(--kt-ai-overlay) 28%, transparent); }
+}

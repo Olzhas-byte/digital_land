@@ -1,0 +1,5 @@
+source:  https://github.com/erjan-A/kt-ai-design-system
+commit:  8ed26abbddcafec128e75dfb35f86486b6210418
+describe: 8ed26ab
+pulled:  2026-09-01T09:38:26Z
+subset:  без examples/, dist/ и React-кита (templates/kt-ai-shadcn) — платформа собирает ванильную статику

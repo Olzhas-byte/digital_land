@@ -1,0 +1,1552 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://kt.kz/ai/product.schema.json",
+  "title": "KT AI Product Contract",
+  "description": "Единый продуктовый контракт KT AI. ОДИН источник, ОДИН рантайм: этот контракт выдаёт дизайнер Төре ([[APP]]), потребляет templates/kt-ai-app-shell.html (кликабельный прототип), читает handoff-док и проверяет scripts/validate_product.py. Раньше форма контракта дублировалась в 4 местах (atomic_product_system.md / app-shell JSON / shadcn input-contract / Төре). Это — каноническая форма. Канон правил вёрстки: docs/DESIGN.md, docs/PRINCIPLES.md.",
+  "type": "object",
+  "required": [
+    "product"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "archetype": {
+      "type": "string",
+      "default": "queue",
+      "description": "Архетип экрана из открытого реестра archetypes/registry.json (id, lowercase). Stable: queue, cockpit, dashboard, compare. Неизвестный или ещё не реализованный (status=planned) архетип безопасно деградирует в queue-таблицу. Набор открыт — новые добавляются записью в реестр + рендерером + примером, без правки ядра. См. docs/ARCHETYPES.md."
+    },
+    "layout": {
+      "type": "string",
+      "description": "Deprecated-алиас archetype. Рантайм читает archetype || layout. Для новых конфигов использовать archetype."
+    },
+    "product": {
+      "type": "object",
+      "required": [
+        "name",
+        "entity"
+      ],
+      "additionalProperties": false,
+      "description": "Кто и о чём. name – короткое имя рабочего объекта (H1, 1-3 слова), не описание процесса.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "purpose": {
+          "type": "string",
+          "maxLength": 90,
+          "description": "Одна scope-фраза (subtitle)."
+        },
+        "entity": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Главная сущность: договор, заявка, лот, документ, инцидент, клиент, задача."
+        },
+        "createLabel": {
+          "type": "string",
+          "maxLength": 24,
+          "description": "Явная подпись кнопки создания (морфология). Если не задано — «Новый {entity}». Пример: «Новое предложение»."
+        },
+        "primary_user": {
+          "type": "string",
+          "description": "Метаданные: роль основного пользователя (для авторинга/handoff; в UI не выводится)."
+        },
+        "language": {
+          "type": "string",
+          "default": "ru",
+          "enum": [
+            "ru",
+            "kk",
+            "en"
+          ],
+          "description": "Метаданные: основной язык продукта (v1 — ru; не переключает локаль рантайма)."
+        },
+        "view": {
+          "type": "string",
+          "enum": [
+            "operational",
+            "management"
+          ],
+          "default": "operational",
+          "description": "operational – рабочая очередь владельца (по умолчанию). management – управленческий/reporting view, где допустимы ROI/FTE/эффект."
+        }
+      }
+    },
+    "user": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        }
+      }
+    },
+    "notifications": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "time": {
+            "type": "string"
+          },
+          "unread": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      }
+    },
+    "steps": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Этапы процесса в мастере создания. НЕ выносятся на главный список (LAYOUT_RULES 9a).",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "current": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "nav": {
+      "type": "array",
+      "description": "Разделы sidebar. 3-5 пунктов на группу (закон Миллера).",
+      "items": {
+        "type": "object",
+        "required": [
+          "label"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "type": "string",
+            "maxLength": 24
+          },
+          "icon": {
+            "type": "string",
+            "description": "Имя иконки из спрайта icons/kt-ai-lucide-sprite.svg (home/feed/lots/risk/chart/tool/file/users/source/decisions/...). Монохром, Lucide."
+          },
+          "view": {
+            "type": "string",
+            "enum": [
+              "documents",
+              "registry"
+            ],
+            "description": "Тип секции. «documents» → коллекция артефактов (скачиваемых) из `_docs` строк; «registry» → полный рабочий реестр (таблица с поиском/фильтрами/пагинацией) — используйте для dashboard, чтобы главная оставалась обзором."
+          },
+          "docType": {
+            "type": "string",
+            "description": "Для view=documents: какой тип документов показать (совпадает с `_docs[].type`, напр. ts/report)."
+          },
+          "group": {
+            "type": "string",
+            "maxLength": 24,
+            "description": "Заголовок группы разделов. Пункты с одинаковым значением идут подряд под общим заголовком; пункты без группы — просто списком, как раньше. Заголовок НЕ пункт: он не кликается и в нумерации не участвует, поэтому banner.actionNav и S.nav(i) считают только пункты. В полосе значков (832-1023px) заголовок становится разделителем."
+          },
+          "count": {
+            "$comment": "DEPRECATED: счётчик в пункте меню; рендерится для старых конфигов, в новых не использовать",
+            "type": [
+              "integer",
+              "number"
+            ]
+          }
+        }
+      }
+    },
+    "kpis": {
+      "type": "array",
+      "description": "Тихая метрик-полоса. Каждая метрика отвечает на вопрос пользователя в этом экране (очередь, риск, просрочка), НЕ доказывает ценность продукта. ROI/FTE/экономия часов/тенге эффекта запрещены при product.view=operational (валидатор предупреждает).",
+      "items": {
+        "type": "object",
+        "required": [
+          "value",
+          "label"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "value": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 32
+          },
+          "hint": {
+            "type": "string",
+            "maxLength": 40,
+            "$comment": "уточнение под значением: знаменатель, доля, период — «из 66», «за месяц»"
+          },
+          "note": {
+            "type": "string",
+            "description": "Сноска: чем это число НЕ является. Поле-источник иногда меряет не ровно то, чем показатель назван («ожидание в очереди» не отделяет автоприветствие бота от первого ответа оператора) — оговорка обязана стоять рядом с числом, а не в баннере над ним. Потолка длины нет: hint остаётся в 40 знаках, чтобы полоса плиток осталась полосой, а оговорка живёт отдельным полем и показывается мельче подписи. Не прячется под клик — спрятанное читают не все."
+          }
+        }
+      }
+    },
+    "scenario": {
+      "type": "object",
+      "required": [
+        "headline",
+        "control"
+      ],
+      "additionalProperties": false,
+      "description": "Один сквозной сценарий владельца: список → деталь → контрольное действие. control – ровно одно главное действие (глагол), один primary на экран.",
+      "properties": {
+        "headline": {
+          "type": "string",
+          "maxLength": 40,
+          "description": "Заголовок рабочей области, 1-3 слова."
+        },
+        "control": {
+          "type": "string",
+          "description": "Главное (primary) действие, глаголом: «Подтвердить и отправить»."
+        },
+        "reject": {
+          "type": "string",
+          "description": "Вторичное/обратное действие."
+        },
+        "confirmText": {
+          "type": "string",
+          "description": "Текст подтверждения в modal для control."
+        },
+        "aiSummary": {
+          "type": "string",
+          "maxLength": 280,
+          "description": "Что сделал агент: 1-2 фразы для шапки карточки (drawer). Конкретно про этот продукт — НЕ переиспользовать чужой текст. Без него блок «Что сделал агент» не показывается."
+        },
+        "approveTo": {
+          "type": "string",
+          "description": "Ключ статуса после control."
+        },
+        "rejectTo": {
+          "type": "string",
+          "description": "Ключ статуса после reject."
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Action Layer: варианты действия, которые человек может выбрать/изменить в карточке (human-in-the-loop). AI рекомендует, человек подтверждает или меняет."
+        }
+      }
+    },
+    "statuses": {
+      "type": "object",
+      "minProperties": 1,
+      "description": "Словарь workflow-статусов главного объекта. Ключ → { label, tone }. Confidence и тип риска моделируются отдельно, не смешиваются со статусом.",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "label",
+          "tone"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "type": "string",
+            "maxLength": 24,
+            "description": "До 4 слов."
+          },
+          "tone": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "warn",
+              "risk",
+              "info"
+            ]
+          },
+          "dim": {
+            "type": "boolean",
+            "description": "Гасит (приглушает) строки с этим статусом — терминальные/неактивные уходят на второй план, активные выделяются (паттерн «dim inactive rows»)."
+          }
+        }
+      }
+    },
+    "chart": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Сводный bar-chart над таблицей: раскатывает данные во времени, чтобы не искать по timestamp-колонке («data drives the form»). Напр.: обращения, разобранные AI, по дням.",
+      "properties": {
+        "title": {
+          "type": "string",
+          "maxLength": 48
+        },
+        "total": {
+          "type": "string",
+          "description": "Крупное итоговое число (например «1 240»)."
+        },
+        "unit": {
+          "type": "string",
+          "maxLength": 24,
+          "description": "Подпись у числа («за месяц», «всего»)."
+        },
+        "color": {
+          "type": "string",
+          "enum": [
+            "blue",
+            "green",
+            "orange",
+            "salmon",
+            "pink",
+            "primary"
+          ],
+          "default": "blue"
+        },
+        "link": {
+          "type": "string",
+          "maxLength": 16,
+          "description": "Опц. подпись ссылки справа («Все»)."
+        },
+        "groupBy": {
+          "type": "string",
+          "description": "Ключ колонки/поля строки: бары считаются из ФИЛЬТРОВАННЫХ строк (counts по значениям), график адаптируется к выбранному табу. Если задан — заменяет статичный bars."
+        },
+        "bucket": {
+          "type": "string",
+          "enum": [
+            "day"
+          ],
+          "description": "Временная раскатка: counts по дням за выбранный диапазон. Требует dateKey. Включает универсальный фильтр диапазона дат (7/30/90/всё), который фильтрует и таблицу, и график."
+        },
+        "dateKey": {
+          "type": "string",
+          "description": "Ключ колонки-даты (ISO YYYY-MM-DD) для bucket:day и фильтра диапазона."
+        },
+        "bars": {
+          "type": "array",
+          "description": "Столбцы. 7–31 шт.",
+          "items": {
+            "type": "object",
+            "required": [
+              "value"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "label": {
+                "type": "string"
+              },
+              "value": {
+                "type": "number",
+                "minimum": 0
+              },
+              "hint": {
+                "type": "object",
+                "additionalProperties": false,
+                "description": "Подсказка марки. Строки приходят готовыми от продукта — рантайм их не форматирует и не пересчитывает.",
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "maxLength": 80
+                  },
+                  "rows": {
+                    "type": "array",
+                    "maxItems": 3,
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "label",
+                        "value"
+                      ],
+                      "additionalProperties": false,
+                      "properties": {
+                        "label": {
+                          "type": "string",
+                          "maxLength": 40
+                        },
+                        "value": {
+                          "type": "string",
+                          "maxLength": 40
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "activity": {
+      "type": "array",
+      "description": "Лента активности (правая панель, триггер-иконка в топбаре): действия агента и история решений во времени. Референс: activity-timeline drawer.",
+      "items": {
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "time": {
+            "type": "string",
+            "description": "Метка времени («Сегодня, 14:13»)."
+          },
+          "ago": {
+            "type": "string",
+            "description": "Относительно («4 часа назад»)."
+          },
+          "tone": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "warn",
+              "risk",
+              "info"
+            ],
+            "description": "Цвет точки на таймлайне."
+          },
+          "who": {
+            "type": "string",
+            "description": "Кто/что инициировал."
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Чипы (датасеты/объекты)."
+          },
+          "summary": {
+            "type": "string",
+            "maxLength": 220
+          },
+          "link": {
+            "type": "string",
+            "maxLength": 32,
+            "description": "Подпись действия-ссылки."
+          }
+        }
+      }
+    },
+    "table": {
+      "type": "object",
+      "required": [
+        "columns",
+        "rows"
+      ],
+      "additionalProperties": false,
+      "description": "Главный рабочий объект экрана для 5+ записей.",
+      "properties": {
+        "pageSize": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Размер страницы таблицы. Если строк больше — появляется пагинация. По умолчанию 12."
+        },
+        "columns": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": [
+              "key",
+              "label"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "key": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][a-zA-Z0-9_]*$"
+              },
+              "label": {
+                "type": "string",
+                "maxLength": 24,
+                "description": "1-2 слова."
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "text",
+                  "num",
+                  "date",
+                  "status"
+                ],
+                "default": "text"
+              },
+              "sub": {
+                "type": "string",
+                "description": "Ключ поля для muted-подзаголовка под значением (двухстрочная entity-ячейка в духе ElevenLabs)."
+              },
+              "values": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Field-level data contract: допустимые значения для status/enum-колонок. Заполняется из паспорта/интервью, чтобы владелец видел ПРАВДУ, а не выдумку."
+              },
+              "source": {
+                "type": "string",
+                "description": "Метаданные авторинга: откуда значение (SAP, Лотус, KTWorks, агент, человек). Для трассировки/handoff; в рантайме v1 не рендерится автоматически."
+              },
+              "align": {
+                "type": "string",
+                "enum": [
+                  "left",
+                  "right"
+                ],
+                "description": "Выравнивание ячеек. По умолчанию num — справа, остальное — слева; задаёт явный override (рендерят оба рантайма)."
+              },
+              "sortable": {
+                "type": "boolean",
+                "default": false
+              },
+              "width": {
+                "type": "string",
+                "description": "Явный override ширины колонки (напр. «140px»). По умолчанию ширина считается по содержимому колонки (из всех строк, с клампом) — не шире и не уже, чем нужно."
+              }
+            }
+          }
+        },
+        "rows": {
+          "type": "array",
+          "description": "8-12 правдоподобных строк. Данные – из материалов проекта/интервью, НЕ выдуманные. _flags – список проверок агента для drawer; _docs – артефакты, которые продукт производит по записи (ТС, отчёт, СЗ…).",
+          "items": {
+            "type": "object",
+            "properties": {
+              "_flags": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "_docs": {
+                "type": "array",
+                "description": "Выходные документы записи. Показываются в drawer (секция «Документы») и в nav-секциях view=documents; каждый со статусом и кнопкой скачать.",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "label"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "label": {
+                      "type": "string",
+                      "description": "Имя документа: «Проект ТС», «Отчёт о консолидации», «Служебная записка»."
+                    },
+                    "type": {
+                      "type": "string",
+                      "description": "Тип для группировки в nav-секции (docType): ts/report/…"
+                    },
+                    "status": {
+                      "type": "string",
+                      "description": "Статус по жизненному циклу: «Черновик v1», «Сформирован», «После принятия»."
+                    },
+                    "format": {
+                      "type": "string",
+                      "description": "Формат для иконки/подписи: doc/pdf/xlsx."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "drawer": {
+      "type": "object",
+      "required": [
+        "titleKey"
+      ],
+      "additionalProperties": false,
+      "description": "Правый drawer деталей объекта (детали в drawer, не на новой странице).",
+      "properties": {
+        "titleKey": {
+          "type": "string",
+          "description": "Ключ колонки для заголовка drawer."
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "key",
+              "label"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "key": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "flagsLabel": {
+          "type": "string"
+        }
+      }
+    },
+    "ai": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Точка входа AI-помощи (орб Төре). LLM-вызовы только через backend (app/api/ai/*), не из клиента. AI-контент атрибутируется «Сгенерировано ИИ».",
+      "properties": {
+        "intro": {
+          "type": "string"
+        },
+        "suggestions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "answers": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "fallback": {
+          "type": "string"
+        }
+      }
+    },
+    "banner": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Системный баннер в контенте по схеме «что-почему-что делать».",
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "tone": {
+          "type": "string",
+          "enum": [
+            "info",
+            "warn",
+            "risk",
+            "ok"
+          ],
+          "default": "info"
+        },
+        "action": {
+          "type": "string",
+          "description": "Подпись действия баннера (делает баннер полезным, не статичным)."
+        },
+        "actionNav": {
+          "type": "integer",
+          "description": "Индекс раздела nav, куда ведёт действие баннера."
+        }
+      }
+    },
+    "search": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Поиск в шапке. Настраивает поле HTML-рантайма; в React-ките те же три поля живут в пропе `search` у KTAIShell (там же items палитры). Само поле не включается и не выключается этим блоком — в HTML-рантайме оно фильтрует таблицу и есть всегда.",
+      "properties": {
+        "placeholder": {
+          "type": "string",
+          "maxLength": 40,
+          "description": "Подсказка в поле. По умолчанию «Поиск…». Сочетание сюда писать НЕ надо — у него свой бейдж."
+        },
+        "compact": {
+          "type": "boolean",
+          "default": false,
+          "description": "Узкое поле (176px) вместо полного: шапка отдаёт место остальному. Бейдж сочетания в нём не показывается — это ширина запроса, а не запроса с подписью; само сочетание продолжает работать и названо в title."
+        },
+        "shortcut": {
+          "type": "boolean",
+          "default": true,
+          "description": "Сочетание ⌘K/Ctrl+K и его бейдж. Выключается ОДНИМ полем: подпись без обработчика — обещание, обработчик без подписи — незаявленная горячая клавиша. Подпись берётся по клавиатуре машины: ⌘K на Apple, Ctrl K на остальных."
+        }
+      }
+    },
+    "conclusion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "text"
+      ],
+      "description": "Вывод раздела — последний блок экрана, после таблицы. Противовес баннера: баннер стоит НАД числами и предупреждает, из-за чего число соврёт; вывод стоит ПОСЛЕ данных и говорит, что из них следует (разбор смещения выборки, оговорка о методике, ответ на вопрос раздела). Без этого слота вывод уходил в баннер, и абзац текста вставал до первого числа.",
+      "properties": {
+        "title": {
+          "type": "string",
+          "maxLength": 60
+        },
+        "text": {
+          "type": "string",
+          "description": "Текст вывода. Пустая строка разделяет абзацы."
+        }
+      }
+    },
+    "compare": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Данные архетипа compare: попарная сверка двух источников, расхождения подсвечены (аудит/финансы/договоры). Требуется при archetype=compare, иначе экран деградирует в queue.",
+      "properties": {
+        "aLabel": {
+          "type": "string"
+        },
+        "bLabel": {
+          "type": "string"
+        },
+        "pairs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "label",
+              "a",
+              "b"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "label": {
+                "type": "string",
+                "description": "Имя сверяемого поля."
+              },
+              "a": {
+                "type": "string",
+                "description": "Ключ колонки источника A."
+              },
+              "b": {
+                "type": "string",
+                "description": "Ключ колонки источника B."
+              }
+            }
+          }
+        }
+      }
+    },
+    "sections": {
+      "type": "array",
+      "description": "Свободная композиция (archetype custom): секции-блоки из примитивов системы в любом порядке. Архетипы — отправные точки; когда процесс не ложится в один архетип, экран собирается отсюда.",
+      "items": {
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "label",
+                "value"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "label": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "type": {
+            "enum": [
+              "text",
+              "cards",
+              "chart",
+              "kpis",
+              "table",
+              "chat"
+            ],
+            "$comment": "text (по умолчанию) | cards — сетка карточек (хаб инструментов, референс ElevenLabs Home) | chart — чарт по контракту analytics | kpis — глобальная KPI-строка | table — глобальная таблица | chat — глобальный ai-блок"
+          },
+          "width": {
+            "enum": [
+              "full",
+              "half"
+            ],
+            "$comment": "half — секция занимает полколонки (двухколоночная композиция)"
+          },
+          "items": {
+            "type": "array",
+            "maxItems": 12,
+            "$comment": "для type=cards",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "title"
+              ],
+              "properties": {
+                "title": {
+                  "type": "string",
+                  "maxLength": 60
+                },
+                "text": {
+                  "type": "string",
+                  "maxLength": 160
+                },
+                "badge": {
+                  "type": "string",
+                  "maxLength": 24
+                },
+                "tone": {
+                  "enum": [
+                    "ok",
+                    "warn",
+                    "risk",
+                    "info"
+                  ]
+                }
+              }
+            }
+          },
+          "chart": {
+            "$ref": "#/properties/analytics/properties/charts/items",
+            "$comment": "для type=chart"
+          }
+        }
+      }
+    },
+    "onboarding": {
+      "type": "array",
+      "description": "Слайды онбординг-карусели при первом входе (2-3). Если не задано — берутся дефолтные слайды на основе product. Иконка из спрайта icons/kt-ai-lucide-sprite.svg.",
+      "items": {
+        "type": "object",
+        "required": [
+          "title",
+          "text"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "icon": {
+            "type": "string",
+            "description": "Имя иконки из спрайта (sparkles/eye/megaphone/book/play/...)."
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 48
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 220
+          }
+        }
+      }
+    },
+    "filterKeys": {
+      "$comment": "DEPRECATED: фильтры выводятся из statuses автоматически; поле рендерится для старых конфигов, в новых не использовать",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "document": {
+      "$comment": "Архетип document: документ с правками агента по фрагментам (договор, письмо, ТЗ)",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "title",
+        "fragments"
+      ],
+      "properties": {
+        "title": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "source": {
+          "type": "string",
+          "maxLength": 160,
+          "$comment": "откуда собран документ (шаблон + заявка)"
+        },
+        "fragments": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 14,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "text"
+            ],
+            "properties": {
+              "heading": {
+                "type": "string",
+                "maxLength": 90
+              },
+              "text": {
+                "type": "string",
+                "maxLength": 700
+              },
+              "was": {
+                "type": "string",
+                "maxLength": 700,
+                "$comment": "прежний текст для op=edit"
+              },
+              "op": {
+                "enum": [
+                  "keep",
+                  "edit",
+                  "add",
+                  "del"
+                ]
+              },
+              "flag": {
+                "type": "string",
+                "maxLength": 220,
+                "$comment": "почему агент пометил фрагмент"
+              }
+            }
+          }
+        }
+      }
+    },
+    "artifact": {
+      "$comment": "Архетип copilot: результат-артефакт рядом с чатом",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "title",
+        "preview"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "document",
+            "slides",
+            "report",
+            "table",
+            "letter"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "version": {
+          "type": "string",
+          "maxLength": 24
+        },
+        "preview": {
+          "type": "string",
+          "maxLength": 4000,
+          "$comment": "текст/markdown-превью артефакта"
+        },
+        "actions": {
+          "type": "array",
+          "maxItems": 3,
+          "items": {
+            "type": "string",
+            "maxLength": 32
+          }
+        }
+      }
+    },
+    "wizard": {
+      "$comment": "Архетип wizard: пошаговая заявка с автозаполнением агентом",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "steps"
+      ],
+      "properties": {
+        "current": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "steps": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 7,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "title",
+              "fields"
+            ],
+            "properties": {
+              "title": {
+                "type": "string",
+                "maxLength": 60
+              },
+              "fields": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 10,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "label"
+                  ],
+                  "properties": {
+                    "label": {
+                      "type": "string",
+                      "maxLength": 60
+                    },
+                    "value": {
+                      "type": [
+                        "string",
+                        "number"
+                      ],
+                      "$comment": "предзаполнено"
+                    },
+                    "prefill": {
+                      "type": "boolean",
+                      "$comment": "true = заполнил агент"
+                    },
+                    "hint": {
+                      "type": "string",
+                      "maxLength": 120,
+                      "$comment": "источник/подсказка"
+                    }
+                  }
+                }
+              },
+              "desc": {
+                "type": "string",
+                "maxLength": 160,
+                "$comment": "описание шага в вертикальном степпере (референс ElevenLabs)"
+              }
+            }
+          }
+        }
+      }
+    },
+    "inbox": {
+      "$comment": "Архетип inbox: список + постоянная панель чтения; ключи указывают на поля table.rows",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bodyKey"
+      ],
+      "properties": {
+        "titleKey": {
+          "type": "string"
+        },
+        "subKey": {
+          "type": "string"
+        },
+        "timeKey": {
+          "type": "string"
+        },
+        "bodyKey": {
+          "type": "string",
+          "$comment": "поле строки с полным текстом (письмо, обращение)"
+        }
+      }
+    },
+    "analytics": {
+      "$comment": "Архетип analytics: аналитический разбор – сводка агента, чарты, выводы",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "charts",
+        "findings"
+      ],
+      "properties": {
+        "summary": {
+          "type": "string",
+          "maxLength": 500,
+          "$comment": "что агент увидел в данных, 1-3 предложения"
+        },
+        "period": {
+          "type": "string",
+          "maxLength": 60
+        },
+        "charts": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "type",
+              "title",
+              "points"
+            ],
+            "properties": {
+              "type": {
+                "enum": [
+                  "bar",
+                  "line",
+                  "donut"
+                ]
+              },
+              "title": {
+                "type": "string",
+                "maxLength": 90
+              },
+              "unit": {
+                "type": "string",
+                "maxLength": 20
+              },
+              "total": {
+                "type": [
+                  "string",
+                  "number"
+                ]
+              },
+              "note": {
+                "type": "string",
+                "maxLength": 160,
+                "$comment": "чтение чарта в одну фразу"
+              },
+              "points": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 14,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "label",
+                    "value"
+                  ],
+                  "properties": {
+                    "label": {
+                      "type": "string",
+                      "maxLength": 40
+                    },
+                    "value": {
+                      "type": [
+                        "number",
+                        "string"
+                      ]
+                    },
+                    "tone": {
+                      "enum": [
+                        "ok",
+                        "warn",
+                        "risk",
+                        "info"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "findings": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 6,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "title"
+            ],
+            "properties": {
+              "title": {
+                "type": "string",
+                "maxLength": 120
+              },
+              "detail": {
+                "type": "string",
+                "maxLength": 300
+              },
+              "value": {
+                "type": [
+                  "string",
+                  "number"
+                ]
+              },
+              "tone": {
+                "enum": [
+                  "ok",
+                  "warn",
+                  "risk",
+                  "info"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "calendar": {
+      "$comment": "Архетип calendar: расписание по датам (окна работ, дежурства, сроки)",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "events"
+      ],
+      "properties": {
+        "title": {
+          "type": "string",
+          "maxLength": 90
+        },
+        "range": {
+          "type": "string",
+          "maxLength": 60
+        },
+        "events": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 30,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "date",
+              "title"
+            ],
+            "properties": {
+              "date": {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+              },
+              "time": {
+                "type": "string",
+                "maxLength": 20
+              },
+              "title": {
+                "type": "string",
+                "maxLength": 120
+              },
+              "note": {
+                "type": "string",
+                "maxLength": 160
+              },
+              "badge": {
+                "type": "string",
+                "maxLength": 30
+              },
+              "tone": {
+                "enum": [
+                  "ok",
+                  "warn",
+                  "risk",
+                  "info"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "map": {
+      "$comment": "Архетип map: схема-карта участка (точки 0-100 по осям, линии-связи); НЕ геокарта с тайлами",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "points"
+      ],
+      "properties": {
+        "title": {
+          "type": "string",
+          "maxLength": 90
+        },
+        "points": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 24,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "label",
+              "x",
+              "y"
+            ],
+            "properties": {
+              "label": {
+                "type": "string",
+                "maxLength": 40
+              },
+              "x": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 100
+              },
+              "y": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 100
+              },
+              "status": {
+                "type": "string",
+                "$comment": "ключ из statuses"
+              },
+              "tone": {
+                "enum": [
+                  "ok",
+                  "warn",
+                  "risk",
+                  "info"
+                ]
+              },
+              "note": {
+                "type": "string",
+                "maxLength": 200
+              }
+            }
+          }
+        },
+        "lines": {
+          "type": "array",
+          "maxItems": 40,
+          "items": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "$comment": "связи как пары индексов points"
+        }
+      }
+    },
+    "timeline": {
+      "$comment": "Архетип timeline: хронология дела/инцидента",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "events"
+      ],
+      "properties": {
+        "title": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "events": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 20,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "time",
+              "title"
+            ],
+            "properties": {
+              "time": {
+                "type": "string",
+                "maxLength": 30
+              },
+              "title": {
+                "type": "string",
+                "maxLength": 140
+              },
+              "text": {
+                "type": "string",
+                "maxLength": 400
+              },
+              "actor": {
+                "type": "string",
+                "maxLength": 50
+              },
+              "tone": {
+                "enum": [
+                  "ok",
+                  "warn",
+                  "risk",
+                  "info"
+                ]
+              },
+              "current": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      }
+    },
+    "dashboard": {
+      "$comment": "Архетип dashboard (референс ElevenLabs): KPI-карточки как табы, выбранная метрика управляет чартом; внизу разборы",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "series"
+      ],
+      "properties": {
+        "range": {
+          "type": "string",
+          "maxLength": 60,
+          "$comment": "период данных, напр. «январь — июль 2026»"
+        },
+        "series": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "points"
+            ],
+            "properties": {
+              "kpi": {
+                "type": "integer",
+                "minimum": 0,
+                "$comment": "индекс метрики в kpis, к которой привязан ряд (по умолчанию — порядковый)"
+              },
+              "title": {
+                "type": "string",
+                "maxLength": 90
+              },
+              "unit": {
+                "type": "string",
+                "maxLength": 20
+              },
+              "total": {
+                "type": [
+                  "string",
+                  "number"
+                ]
+              },
+              "note": {
+                "type": "string",
+                "maxLength": 160,
+                "$comment": "чтение чарта одной фразой"
+              },
+              "points": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 32,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "label",
+                    "value"
+                  ],
+                  "properties": {
+                    "label": {
+                      "type": "string",
+                      "maxLength": 20
+                    },
+                    "value": {
+                      "type": [
+                        "number",
+                        "string"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "breakdowns": {
+          "type": "array",
+          "maxItems": 4,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "title",
+              "type",
+              "items"
+            ],
+            "properties": {
+              "title": {
+                "type": "string",
+                "maxLength": 90
+              },
+              "type": {
+                "enum": [
+                  "cards",
+                  "share",
+                  "top"
+                ]
+              },
+              "unit": {
+                "type": "string",
+                "maxLength": 20
+              },
+              "note": {
+                "type": "string",
+                "maxLength": 160
+              },
+              "items": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 10,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "label": {
+                      "type": "string",
+                      "maxLength": 60
+                    },
+                    "value": {
+                      "type": [
+                        "number",
+                        "string"
+                      ]
+                    },
+                    "title": {
+                      "type": "string",
+                      "maxLength": 60,
+                      "$comment": "для type=cards"
+                    },
+                    "stats": {
+                      "type": "array",
+                      "maxItems": 5,
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "label",
+                          "value"
+                        ],
+                        "properties": {
+                          "label": {
+                            "type": "string",
+                            "maxLength": 40
+                          },
+                          "value": {
+                            "type": [
+                              "string",
+                              "number"
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "width": {
+      "type": "string",
+      "enum": [
+        "full",
+        "reading"
+      ],
+      "description": "Ширина рабочей области свободного экрана. «reading» — мера чтения сплошного текста (~720px), «full» — общая ширина продукта. Без поля: экран только из текстовых секций читается как «reading», любой другой — «full». Секция fields считается НЕ текстом: пары «подпись — значение» на 720px читаются хуже."
+    }
+  }
+}

@@ -1,0 +1,144 @@
+/* ============================================================
+ * KT AI Page — примитивы СТРАНИЦЫ (лендинг, вход, ошибка, документация).
+ * Требует kt-ai-tokens.css. Подключать ДОПОЛНИТЕЛЬНО к kt-ai-components.css.
+ *
+ * Зачем отдельный файл: kt-ai-components.css покрывает продуктовые экраны
+ * внутри приложения (таблицы, формы, drawer). Всё, что «до входа» — лендинг,
+ * страница входа, 404, публичная документация — приходилось верстать руками,
+ * и каждый делал это по-своему. Здесь только каркас: ритм, контейнер, сетка.
+ * Ничего брендового — цвет и вордмарк живут в слое продукта.
+ *
+ * app-shell этот файл НЕ подключает: внутри приложения он не нужен.
+ * ============================================================ */
+
+@layer kt-page {
+
+/* ---------- База страницы ----------
+   Подключение этого файла означает «страницу целиком строю на ДС», поэтому
+   здесь можно задать основу. kt-ai-components.css этого НЕ делает намеренно:
+   его вендорят в чужое приложение, и перекрашивать чужой body нельзя.
+   Без этой базы страница уезжала в браузерный serif — базовый шрифт задавался
+   только в HTML app-shell (тот же перекос, что был с box-sizing). */
+html { scrollbar-gutter: stable; }  /* место под скроллбар зарезервировано всегда: контент не прыгает вбок, когда модал прячет скроллбар */
+body {
+  margin: 0;
+  background: var(--kt-ai-bg);
+  color: var(--kt-ai-fg);
+  font-family: var(--kt-ai-font-sans);
+  font-size: var(--kt-ai-text-md);
+  line-height: var(--kt-ai-leading-normal);
+  -webkit-font-smoothing: antialiased;
+}
+::selection { background: var(--kt-ai-selection); }
+
+/* ---------- Контейнер и ритм ---------- */
+.kt-ai-wrap { width: min(1080px, 92vw); margin-inline: auto; }
+.kt-ai-wrap[data-width="narrow"] { width: min(720px, 92vw); }
+.kt-ai-wrap[data-width="wide"]   { width: min(1200px, 94vw); }
+
+/* Вертикальный ритм секций: одна переменная вместо margin вручную у каждой. */
+.kt-ai-section { padding-block: clamp(48px, 8vh, 88px); }
+.kt-ai-section[data-divider="true"] { border-top: 1px solid var(--kt-ai-divider); }
+.kt-ai-section-head { max-width: 640px; }
+.kt-ai-section-head h2 {
+  margin: 0; font-size: var(--kt-ai-text-2xl); font-weight: var(--kt-ai-weight-semibold);
+  letter-spacing: -0.02em; color: var(--kt-ai-fg);
+}
+.kt-ai-section-head p {
+  margin: var(--kt-ai-space-5) 0 0; color: var(--kt-ai-fg-muted);
+  font-size: var(--kt-ai-text-lg); line-height: var(--kt-ai-leading-normal);
+}
+.kt-ai-section-head .kt-ai-tagline {
+  display: block; margin-top: var(--kt-ai-space-3);
+  color: var(--kt-ai-fg-muted); font-size: var(--kt-ai-text-md);
+}
+
+/* ---------- Шапка страницы (тонкая, контент важнее хрома) ---------- */
+.kt-ai-pagehead {
+  position: sticky; top: 0; z-index: var(--kt-ai-z-sticky);
+  border-bottom: 1px solid var(--kt-ai-border);
+  background: var(--kt-ai-bg-glass);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+}
+.kt-ai-pagehead-in { display: flex; align-items: center; gap: var(--kt-ai-space-6); height: 56px; }
+.kt-ai-pagehead-in > .kt-ai-spacer { margin-left: auto; }
+@media (prefers-reduced-transparency: reduce) {
+  .kt-ai-pagehead { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--kt-ai-bg-elevated); }
+}
+
+/* ---------- Hero ---------- */
+.kt-ai-hero { padding-block: clamp(56px, 11vh, 104px) clamp(40px, 7vh, 72px); }
+.kt-ai-hero[data-align="center"] { text-align: center; }
+.kt-ai-hero h1 {
+  margin: 0; font-size: clamp(32px, 5.5vw, 52px); font-weight: var(--kt-ai-weight-semibold);
+  letter-spacing: -0.035em; line-height: 1.05; color: var(--kt-ai-fg);
+}
+.kt-ai-hero-sub {
+  margin: var(--kt-ai-space-6) 0 0; max-width: 620px;
+  color: var(--kt-ai-fg-muted); font-size: var(--kt-ai-text-lg);
+  line-height: var(--kt-ai-leading-normal);
+}
+.kt-ai-hero[data-align="center"] .kt-ai-hero-sub { margin-inline: auto; }
+.kt-ai-hero-actions { display: flex; gap: var(--kt-ai-space-4); margin-top: var(--kt-ai-space-8); flex-wrap: wrap; }
+.kt-ai-hero[data-align="center"] .kt-ai-hero-actions { justify-content: center; }
+
+/* ---------- Сетка возможностей (bento) ----------
+   Плитки группируются границей, а не тенью — как карточки в приложении.
+   data-span управляет шириной: следи, чтобы сумма давала целые ряды,
+   иначе в сетке появится дыра (это «гигантская пустота» из красных флагов). */
+.kt-ai-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--kt-ai-space-6); }
+.kt-ai-grid[data-cols="2"] { grid-template-columns: repeat(2, 1fr); }
+.kt-ai-grid[data-cols="4"] { grid-template-columns: repeat(4, 1fr); }
+.kt-ai-tile {
+  border: 1px solid var(--kt-ai-card-border); border-radius: var(--kt-ai-radius-3xl);
+  background: var(--kt-ai-card-bg); padding: var(--kt-ai-space-8);
+  transition: border-color var(--kt-ai-dur-base) var(--kt-ai-ease-standard);
+}
+.kt-ai-tile:hover { border-color: var(--kt-ai-card-border-hover); }
+.kt-ai-tile[data-span="2"]    { grid-column: span 2; }
+.kt-ai-tile[data-span="full"] { grid-column: 1 / -1; }
+.kt-ai-tile h3 {
+  margin: 0; font-size: var(--kt-ai-text-lg); font-weight: var(--kt-ai-weight-semibold);
+  letter-spacing: -0.01em; color: var(--kt-ai-fg);
+}
+.kt-ai-tile p {
+  margin: var(--kt-ai-space-4) 0 0; color: var(--kt-ai-fg-muted);
+  font-size: var(--kt-ai-text-md); line-height: var(--kt-ai-leading-normal);
+}
+.kt-ai-tile-icon { display: inline-flex; margin-bottom: var(--kt-ai-space-5); color: var(--kt-ai-fg-muted); }
+.kt-ai-tile-icon svg { width: 18px; height: 18px; }
+
+/* ---------- Призыв к действию ---------- */
+.kt-ai-cta { text-align: center; padding-block: clamp(64px, 11vh, 108px); }
+.kt-ai-cta h2 {
+  margin: 0; font-size: var(--kt-ai-text-2xl); font-weight: var(--kt-ai-weight-semibold);
+  letter-spacing: -0.02em; color: var(--kt-ai-fg);
+}
+.kt-ai-cta p { margin: var(--kt-ai-space-4) 0 var(--kt-ai-space-8); color: var(--kt-ai-fg-muted); font-size: var(--kt-ai-text-lg); }
+
+/* ---------- Подвал ---------- */
+.kt-ai-pagefoot {
+  border-top: 1px solid var(--kt-ai-divider); padding-block: var(--kt-ai-space-8);
+  display: flex; align-items: center; gap: var(--kt-ai-space-6);
+  color: var(--kt-ai-fg-faint); font-size: var(--kt-ai-text-sm); flex-wrap: wrap;
+}
+.kt-ai-pagefoot > .kt-ai-spacer { margin-left: auto; }
+
+/* ---------- Центрированная карточка (вход, 404) ---------- */
+.kt-ai-centered {
+  min-height: 100dvh; display: grid; place-items: center; padding: var(--kt-ai-space-8);
+}
+.kt-ai-centered > * { width: min(400px, 100%); }
+
+/* ---------- Адаптив ---------- */
+@media (max-width: 900px) {
+  .kt-ai-grid, .kt-ai-grid[data-cols="4"] { grid-template-columns: repeat(2, 1fr); }
+  .kt-ai-tile[data-span="2"] { grid-column: span 2; }
+}
+@media (max-width: 620px) {
+  .kt-ai-grid, .kt-ai-grid[data-cols="2"], .kt-ai-grid[data-cols="4"] { grid-template-columns: 1fr; }
+  .kt-ai-tile[data-span="2"], .kt-ai-tile[data-span="full"] { grid-column: span 1; }
+  .kt-ai-pagehead-in { height: 52px; gap: var(--kt-ai-space-4); }
+}
+
+}

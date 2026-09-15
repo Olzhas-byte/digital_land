@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="auto">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Digital Bridge — Генератор AI-сервисов</title>
+<link rel="stylesheet" href="design-system/kt-ai-fonts.css">
+<link rel="stylesheet" href="design-system/kt-ai-tokens.css">
+<link rel="stylesheet" href="design-system/kt-ai-components.css">
+<link rel="stylesheet" href="design-system/kt-ai-page.css">
+<style>
+  a.kt-ai-btn, a.kt-ai-brand-row { text-decoration: none; }
+  .step { display: none; }
+  .step.active { display: block; }
+
+  .kt-ai-hero {
+    padding: var(--kt-ai-space-16) 0 var(--kt-ai-space-12);
+    background: linear-gradient(180deg, var(--kt-ai-bg-soft) 0%, var(--kt-ai-bg) 100%);
+  }
+
+  /* Индикатор шагов */
+  .steps {
+    display: flex; justify-content: center; gap: var(--kt-ai-space-3);
+    flex-wrap: wrap; margin-bottom: var(--kt-ai-space-10);
+    font-size: var(--kt-ai-text-sm); color: var(--kt-ai-fg-faint);
+  }
+  .steps span {
+    display: inline-flex; align-items: center; gap: var(--kt-ai-space-2);
+    padding: var(--kt-ai-space-2) var(--kt-ai-space-4);
+    border-radius: var(--kt-ai-radius-full); background: var(--kt-ai-bg-soft);
+  }
+  .steps span.done { color: var(--kt-ai-status-ok-fg); background: var(--kt-ai-status-ok-bg); }
+  .steps span.current { color: var(--kt-ai-fg-on-fill); background: var(--kt-ai-primary); }
+
+  /* Постеры ролей — офлайн, без внешних картинок */
+  .role-poster {
+    position: relative; overflow: hidden; cursor: pointer;
+    min-height: 220px; display: flex; flex-direction: column; justify-content: flex-end;
+    padding: var(--kt-ai-space-6);
+    border-radius: var(--kt-ai-radius-2xl);
+    border: 1px solid var(--kt-ai-border);
+    background:
+      radial-gradient(120% 90% at 100% 0%, var(--poster-bg) 0%, transparent 60%),
+      var(--kt-ai-card-bg);
+    transition: transform var(--kt-ai-dur-base) var(--kt-ai-ease-standard), box-shadow var(--kt-ai-dur-base) var(--kt-ai-ease-standard);
+  }
+  .role-poster[data-wide] { grid-column: span 2; }
+  @media (max-width: 620px) { .role-poster[data-wide] { grid-column: span 1; } }
+  .role-poster:hover { transform: translateY(-6px); box-shadow: var(--kt-ai-shadow-lg); }
+  .role-poster:focus-visible { outline: none; box-shadow: var(--kt-ai-focus-shadow); }
+  .role-poster.selected { outline: 3px solid var(--poster-fg); outline-offset: -3px; }
+  .role-poster .kt-icon {
+    position: absolute; top: var(--kt-ai-space-6); right: var(--kt-ai-space-6);
+    width: 44px; height: 44px; color: var(--poster-fg); opacity: .9;
+  }
+  .poster-badge {
+    display: inline-flex; align-self: flex-start; align-items: center;
+    padding: var(--kt-ai-space-1) var(--kt-ai-space-3); margin-bottom: var(--kt-ai-space-3);
+    border-radius: var(--kt-ai-radius-full);
+    font-size: var(--kt-ai-text-xs); font-weight: var(--kt-ai-weight-medium);
+    color: var(--poster-fg); background: var(--poster-bg);
+  }
+  .poster-title { font-size: var(--kt-ai-text-xl); font-weight: var(--kt-ai-weight-bold); color: var(--kt-ai-fg); margin-bottom: var(--kt-ai-space-2); }
+  .poster-desc { font-size: var(--kt-ai-text-sm); color: var(--kt-ai-fg-muted); line-height: var(--kt-ai-leading-normal); }
+
+  /* Цветовые темы постеров — из чипов и статусов ДС, работают в обеих темах */
+  [data-tone="green"]  { --poster-bg: var(--kt-ai-chip-green-bg);  --poster-fg: var(--kt-ai-chip-green-fg); }
+  [data-tone="blue"]   { --poster-bg: var(--kt-ai-chip-blue-bg);   --poster-fg: var(--kt-ai-chip-blue-fg); }
+  [data-tone="orange"] { --poster-bg: var(--kt-ai-chip-orange-bg); --poster-fg: var(--kt-ai-chip-orange-fg); }
+  [data-tone="purple"] { --poster-bg: var(--kt-ai-chip-purple-bg); --poster-fg: var(--kt-ai-chip-purple-fg); }
+  [data-tone="red"]    { --poster-bg: var(--kt-ai-chip-red-bg);    --poster-fg: var(--kt-ai-chip-red-fg); }
+  [data-tone="gray"]   { --poster-bg: var(--kt-ai-chip-gray-bg);   --poster-fg: var(--kt-ai-chip-gray-fg); }
+  [data-tone="ai"]     { --poster-bg: var(--kt-ai-primary-subtle); --poster-fg: var(--kt-ai-primary); }
+
+  /* Карточки продуктов */
+  .product-card {
+    cursor: pointer; overflow: hidden; position: relative;
+    background: var(--kt-ai-card-bg); border: 1px solid var(--kt-ai-border);
+    border-radius: var(--kt-ai-radius-xl);
+    transition: transform var(--kt-ai-dur-base) var(--kt-ai-ease-standard), box-shadow var(--kt-ai-dur-base) var(--kt-ai-ease-standard), border-color var(--kt-ai-dur-base);
+  }
+  .product-card:hover { transform: translateY(-4px); box-shadow: var(--kt-ai-shadow-lg); border-color: var(--kt-ai-primary); }
+  .product-card:focus-visible { outline: none; box-shadow: var(--kt-ai-focus-shadow); }
+  .product-card.selected { outline: 2px solid var(--kt-ai-primary); }
+  .product-card.recommended { border-color: var(--poster-fg); }
+  .product-card .reco {
+    position: absolute; top: var(--kt-ai-space-4); right: var(--kt-ai-space-4);
+    padding: var(--kt-ai-space-1) var(--kt-ai-space-3); border-radius: var(--kt-ai-radius-full);
+    font-size: var(--kt-ai-text-xs); font-weight: var(--kt-ai-weight-medium);
+    background: var(--kt-ai-card-bg); color: var(--poster-fg); display: none;
+  }
+  .product-card.recommended .reco { display: inline-flex; }
+  .product-header {
+    height: 110px; display: flex; align-items: center; justify-content: center;
+    background: var(--poster-bg);
+  }
+  .product-header .kt-icon { width: 40px; height: 40px; color: var(--poster-fg); }
+  .product-body { padding: var(--kt-ai-space-5); }
+  .product-title { font-size: var(--kt-ai-text-lg); font-weight: var(--kt-ai-weight-semibold); color: var(--kt-ai-fg); margin-bottom: var(--kt-ai-space-2); }
+  .product-desc { font-size: var(--kt-ai-text-sm); color: var(--kt-ai-fg-muted); line-height: var(--kt-ai-leading-normal); }
+
+  .field-error { display: none; margin-top: var(--kt-ai-space-2); font-size: var(--kt-ai-text-xs); color: var(--kt-ai-danger); }
+  .kt-ai-field[data-invalid="true"] .field-error { display: block; }
+
+  .prompt-output {
+    background: var(--kt-ai-bg-soft); padding: var(--kt-ai-space-6);
+    border-radius: var(--kt-ai-radius-xl); border: 1px solid var(--kt-ai-border);
+    font-family: var(--kt-ai-font-mono); font-size: var(--kt-ai-text-sm);
+    white-space: pre-wrap; max-height: 450px; overflow-y: auto;
+  }
+</style>
+</head>
+<body>
+
+<header class="kt-ai-pagehead">
+  <div class="kt-ai-wrap kt-ai-pagehead-in">
+    <a class="kt-ai-brand-row" href="#"><img src="design-system/brand/kt-ai-logo.png" alt="Vibe42"> <span>Digital Bridge</span></a>
+    <span class="kt-ai-spacer"></span>
+    <button class="kt-ai-btn" data-variant="ghost" type="button" onclick="resetWizard()">Начать заново</button>
+  </div>
+</header>
+
+<section class="kt-ai-hero" data-align="center">
+  <div class="kt-ai-wrap">
+    <h1 style="max-width: 720px; margin: 0 auto">Создай свой AI-сервис за 60 минут</h1>
+    <p class="kt-ai-hero-sub" style="max-width: 560px; margin: var(--kt-ai-space-4) auto 0">Выбери роль, настрой продукт и получи готовый промт для Vibe AI</p>
+  </div>
+</section>
+
+<main class="kt-ai-wrap" style="padding: var(--kt-ai-space-12) 0">
+
+  <div class="steps" id="stepsBar" aria-label="Прогресс">
+    <span data-step="1">1 · Роль</span>
+    <span data-step="2">2 · Сервис</span>
+    <span data-step="3">3 · Настройка</span>
+    <span data-step="4">4 · Промт</span>
+  </div>
+
+  <!-- Шаг 1: роль -->
+  <div id="step1" class="step active">
+    <div class="kt-ai-section-head" style="text-align: center; margin-bottom: var(--kt-ai-space-10)">
+      <h2>Кто вы?</h2>
+      <p>Выберите роль — мы подсветим подходящие сервисы</p>
+    </div>
+    <div class="kt-ai-grid" data-cols="4" style="gap: var(--kt-ai-space-6)" id="roleGrid"></div>
+  </div>
+
+  <!-- Шаг 2: сервис -->
+  <div id="step2" class="step">
+    <div class="kt-ai-section-head" style="text-align: center; margin-bottom: var(--kt-ai-space-10)">
+      <h2>Выберите сервис</h2>
+      <p id="productsSub">8 готовых AI-решений под вашу задачу</p>
+    </div>
+    <div class="kt-ai-grid" data-cols="2" style="gap: var(--kt-ai-space-6)" id="productGrid"></div>
+    <div style="text-align: center; margin-top: var(--kt-ai-space-8)">
+      <button class="kt-ai-btn" data-variant="ghost" type="button" onclick="goToStep(1)">← Назад</button>
+    </div>
+  </div>
+
+  <!-- Шаг 3: настройка -->
+  <div id="step3" class="step">
+    <div class="kt-ai-section-head" style="text-align: center; margin-bottom: var(--kt-ai-space-10)">
+      <h2 id="productTitle">Настройка сервиса</h2>
+      <p>Ответьте на несколько вопросов для персонализации</p>
+    </div>
+    <div class="kt-ai-card" style="max-width: 640px; margin: 0 auto">
+      <div class="kt-ai-card-body">
+        <form id="setupForm" novalidate>
+          <div class="kt-ai-field" id="ideaField" hidden>
+            <label for="q0">Опишите вашу идею</label>
+            <textarea class="kt-ai-textarea" id="q0" rows="4" placeholder="Например: сервис, который помогает подобрать подарок по интересам и бюджету"></textarea>
+            <div class="field-error">Опишите идею хотя бы в двух-трёх предложениях</div>
+          </div>
+          <div class="kt-ai-field" style="margin-top: var(--kt-ai-space-6)">
+            <label for="q1">Для кого приложение? (целевая аудитория)</label>
+            <input class="kt-ai-input" id="q1" placeholder="Например: для туристов-одиночек 25-35 лет">
+            <div class="field-error">Укажите, для кого делаете сервис</div>
+          </div>
+          <div class="kt-ai-field" style="margin-top: var(--kt-ai-space-6)">
+            <label for="q2">Что важнее всего в этом сервисе?</label>
+            <input class="kt-ai-input" id="q2" placeholder="Например: скорость подбора вариантов">
+            <div class="field-error">Назовите главный приоритет</div>
+          </div>
+          <div class="kt-ai-field" style="margin-top: var(--kt-ai-space-6)">
+            <label for="q3">Какой стиль интерфейса предпочитаете?</label>
+            <select class="kt-ai-select" id="q3">
+              <option>Минимализм (светлый)</option>
+              <option>Тёмная тема</option>
+              <option>Яркий и современный</option>
+              <option>Строгий деловой</option>
+            </select>
+          </div>
+          <div class="kt-ai-field" style="margin-top: var(--kt-ai-space-6)">
+            <label for="q4">Что нужно персонализировать? (необязательно)</label>
+            <input class="kt-ai-input" id="q4" placeholder="Например: добавить фильтр по бюджету">
+          </div>
+          <div style="margin-top: var(--kt-ai-space-8); display: flex; gap: var(--kt-ai-space-4); flex-wrap: wrap">
+            <button class="kt-ai-btn" data-variant="ghost" type="button" onclick="goToStep(2)">← Назад</button>
+            <button class="kt-ai-btn" data-variant="primary" type="submit">Создать промт →</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Шаг 4: промт -->
+  <div id="step4" class="step">
+    <div class="kt-ai-section-head" style="text-align: center; margin-bottom: var(--kt-ai-space-10)">
+      <h2>Ваш промт готов!</h2>
+      <p>Скопируйте или откройте в Vibe AI</p>
+    </div>
+    <div class="kt-ai-card" style="max-width: 800px; margin: 0 auto">
+      <div class="kt-ai-card-body">
+        <div class="prompt-output" id="promptOutput" tabindex="0"></div>
+        <div style="margin-top: var(--kt-ai-space-6); display: flex; gap: var(--kt-ai-space-4); flex-wrap: wrap">
+          <button class="kt-ai-btn" data-variant="primary" type="button" onclick="copyPrompt()">
+            <svg class="kt-icon" aria-hidden="true" style="margin-right: var(--kt-ai-space-2)"><use href="#copy"></use></svg>
+            Копировать промт
+          </button>
+          <a class="kt-ai-btn" data-variant="ghost" href="https://code.vibe42.kz" target="_blank" rel="noopener">
+            <svg class="kt-icon" aria-hidden="true" style="margin-right: var(--kt-ai-space-2)"><use href="#external"></use></svg>
+            Открыть Vibe AI
+          </a>
+          <button class="kt-ai-btn" data-variant="ghost" type="button" onclick="goToStep(3)">← Назад</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<footer class="kt-ai-wrap kt-ai-pagefoot" style="margin-top: var(--kt-ai-space-12)">
+  <span>© 2026 Vibe42 × Digital Bridge</span>
+  <span class="kt-ai-spacer"></span>
+  <span>Создай свой AI-сервис за 60 минут</span>
+</footer>
+
+<div class="kt-ai-toast-stack" id="toasts"></div>
+
+<script src="design-system/icons/kt-ai-icons.js"></script>
+<script>
+// ---------- Данные ----------
+const roles = [
+  { id: 'entrepreneur', tone: 'green',  icon: 'rocket',    badge: 'Бизнес',      title: 'Предприниматель',        desc: 'Создаю бизнес-инструменты для роста и автоматизации', reco: ['idea', 'budget', 'task'] },
+  { id: 'it',           tone: 'blue',   icon: 'sparkles',  badge: 'Технологии',  title: 'IT-специалист',          desc: 'Разрабатываю решения для коллег и клиентов',           reco: ['task', 'learning', 'hr'] },
+  { id: 'hr',           tone: 'orange', icon: 'users',     badge: 'Люди',        title: 'HR',                     desc: 'Подбираю таланты и развиваю команду',                  reco: ['hr', 'event', 'learning'] },
+  { id: 'marketing',    tone: 'red',    icon: 'megaphone', badge: 'Контент',     title: 'Маркетолог',             desc: 'Продвигаю продукты и создаю контент',                  reco: ['content', 'idea', 'event'] },
+  { id: 'student',      tone: 'purple', icon: 'book',      badge: 'Обучение',    title: 'Студент',                desc: 'Учусь и создаю проекты для портфолио',                 reco: ['learning', 'task', 'budget'] },
+  { id: 'creator',      tone: 'green',  icon: 'sparkles',  badge: 'Творчество',  title: 'Creator',                desc: 'Создаю контент для соцсетей и блогов',                 reco: ['content', 'trip', 'event'] },
+  { id: 'beginner',     tone: 'gray',   icon: 'lightbulb', badge: 'Начало',      title: 'Просто хочу попробовать', desc: 'Любопытно создать свой первый AI-сервис',             reco: ['trip', 'budget', 'task'], wide: true },
+  { id: 'custom',       tone: 'ai',     icon: 'user',      badge: 'Уникально',   title: 'Своя идея',              desc: 'Хочу создать уникальный продукт с нуля',               reco: ['custom'] },
+];
+
+const products = {
+  trip: { tone: 'green', icon: 'rocket', title: 'AI Trip Planner', desc: 'Персональный маршрут путешествия по бюджету, интересам и типу отдыха',
+    base: `Создай веб-приложение "AI Trip Planner" — персональный планировщик путешествий.
+
+Функционал:
+- Форма ввода: бюджет (тенге), количество дней, тип отдыха (пляжный/активный/культурный/природа), интересы (теги)
+- Генерация маршрута по дням с активностями, временем, стоимостью
+- Карта с точками (используй статические координаты или заглушки)
+- Экспорт маршрута в PDF/текст
+- Сохранение в localStorage
+
+AI-фичи:
+- Рекомендации мест на основе интересов
+- Оптимизация бюджета
+- Советы по сезону и погоде
+
+Дизайн: минималистичный, с крупными карточками локаций, прогресс-бар бюджета.
+
+ВАЖНО: Не использовать внешние API (Google Maps, погодные). Все данные — моковые или генерируемые AI. Публикация в локальном git как веб-страница.` },
+  budget: { tone: 'blue', icon: 'chart', title: 'Smart Budget', desc: 'Анализ бюджета: доходы, расходы, прогноз и рекомендации',
+    base: `Создай веб-приложение "Smart Budget" — умный анализ личных финансов.
+
+Функционал:
+- Ввод: ежемесячный доход, постоянные расходы (аренда, коммуналка, еда), переменные расходы, финансовая цель
+- Визуализация: круговая диаграмма расходов, прогноз накоплений
+- Таблица расходов по категориям
+- Рекомендации по оптимизации
+
+AI-фичи:
+- Анализ паттернов трат
+- Персональные советы по экономии
+- Прогноз достижения цели
+
+Дизайн: светлый, с акцентами на цифрах, dashboard-стиль.
+
+ВАЖНО: Без подключения банковских API. Все расчёты локально. Публикация в локальном git.` },
+  learning: { tone: 'purple', icon: 'book', title: 'AI Learning Coach', desc: 'План обучения: язык, программирование, любой навык',
+    base: `Создай веб-приложение "AI Learning Coach" — персональный тренер по обучению.
+
+Функционал:
+- Выбор навыка (язык/программирование/дизайн/другое)
+- Ввод: текущий уровень, цель, часов в неделю, дедлайн
+- Генерация пошагового плана на недели
+- Трекер прогресса
+- Библиотека ресурсов (ссылки-заглушки)
+
+AI-фичи:
+- Адаптация плана под прогресс
+- Генерация практических заданий
+- Мотивационные сообщения
+
+Дизайн: дружелюбный, с прогресс-барами, чек-листами.
+
+ВАЖНО: Без внешних LMS. Все данные локально в localStorage. Публикация в git.` },
+  hr: { tone: 'orange', icon: 'users', title: 'HR Candidate Matcher', desc: 'Сопоставление резюме и вакансии: % соответствия, риски, вопросы',
+    base: `Создай веб-приложение "HR Candidate Matcher" — анализ соответствия кандидата вакансии.
+
+Функционал:
+- Два текстовых поля: описание вакансии, резюме кандидата
+- Расчёт % соответствия
+- Список сильных сторон
+- Список рисков и слабых мест
+- Генерация вопросов для интервью
+
+AI-фичи:
+- Выделение ключевых навыков из текста
+- Сравнение требований и опыта
+- Рекомендации по развитию кандидата
+
+Дизайн: строгий деловой, с цветовыми индикаторами (зелёный/жёлтый/красный).
+
+ВАЖНО: Без интеграции с HH.kz. Анализ текста локально. Публикация в git.` },
+  content: { tone: 'red', icon: 'sparkles', title: 'AI Content Studio', desc: 'Контент-план, идеи, Reels, посты для соцсетей',
+    base: `Создай веб-приложение "AI Content Studio" — студия контента для соцсетей.
+
+Функционал:
+- Ввод: сфера деятельности, целевая аудитория, цель (продажи/охват/лояльность)
+- Генерация контент-плана на месяц (темы, форматы, даты)
+- Идеи для Reels/TikTok (сценарии по 15-30 сек)
+- Hooks для постов (цепляющие заголовки)
+
+AI-фичи:
+- Анализ трендов ниши
+- Персонализация тональности (Tone of Voice)
+- A/B тесты заголовков
+
+Дизайн: яркий, креативный, с карточками идей.
+
+ВАЖНО: Без подключения к Instagram/TikTok API. Контент генерируется AI. Публикация в git.` },
+  idea: { tone: 'green', icon: 'lightbulb', title: 'Business Idea Analyzer', desc: 'Анализ бизнес-идеи: аудитория, риски, монетизация',
+    base: `Создай веб-приложение "Business Idea Analyzer" — анализ бизнес-идеи.
+
+Функционал:
+- Ввод: описание идеи (текст)
+- Вывод: целевая аудитория, проблема, ценностное предложение
+- Анализ рисков (список)
+- Варианты монетизации
+- Roadmap первых шагов
+
+AI-фичи:
+- Оценка потенциала рынка
+- Анализ конкурентов (заглушки)
+- Рекомендации по валидации
+
+Дизайн: деловой, с инфографикой, step-by-step.
+
+ВАЖНО: Без реальных рыночных данных. Анализ на основе AI. Публикация в git.` },
+  event: { tone: 'orange', icon: 'calendar', title: 'Event Planner', desc: 'Программа мероприятия, расписание, маршрут участника',
+    base: `Создай веб-приложение "Event Planner" — планировщик мероприятий.
+
+Функционал:
+- Ввод: тип события, количество участников, длительность, бюджет
+- Генерация программы по времени
+- Список активностей
+- Персональный маршрут для участника
+- Чек-лист подготовки
+
+AI-фичи:
+- Рекомендации спикеров/активностей
+- Оптимизация тайминга
+- Советы по вовлечению
+
+Дизайн: календарь-сетка, timeline, карточки активностей.
+
+ВАЖНО: Без интеграции с календарями. Все данные локально. Публикация в git.` },
+  task: { tone: 'blue', icon: 'checklist', title: 'Smart Task Planner', desc: 'Приоритизация задач, планирование расписания',
+    base: `Создай веб-приложение "Smart Task Planner" — умный планировщик задач.
+
+Функционал:
+- Ввод списка задач (текстом или по одной)
+- Авто-приоритизация (Eisenhower Matrix)
+- Оценка времени на задачу
+- Рекомендуемое расписание на день/неделю
+- Трекер выполнения
+
+AI-фичи:
+- Умная сортировка по срочности/важности
+- Рекомендации по делегированию
+- Анализ продуктивности
+
+Дизайн: минимализм, канбан-доска, календарь.
+
+ВАЖНО: Без интеграции с Trello/Notion. Локальное хранение. Публикация в git.` },
+  custom: { tone: 'ai', icon: 'user', title: 'Своя идея', desc: 'Опишите продукт своими словами — соберём промт по вашей идее',
+    base: `Создай веб-приложение по описанию ниже.
+
+ИДЕЯ:
+{{idea}}
+
+Обязательно:
+- Продумай минимальный набор экранов и функций, чтобы идея работала end-to-end
+- Добавь форму ввода данных пользователя и понятный результат
+- Сохраняй данные пользователя в localStorage
+- Добавь 2-3 AI-фичи, которые усиливают идею (рекомендации, анализ, генерация)
+
+ВАЖНО: Без внешних API и платных сервисов. Все данные моковые или генерируемые AI. Публикация в локальном git как веб-страница.` },
+};
+
+// ---------- Состояние ----------
+let selectedRole = null;
+let selectedProduct = null;
+
+// ---------- Рендер ----------
+const icon = name => `<svg class="kt-icon" aria-hidden="true"><use href="#${name}"></use></svg>`;
+
+function renderRoles() {
+  document.getElementById('roleGrid').innerHTML = roles.map(r => `
+    <div class="role-poster" role="button" tabindex="0" data-role="${r.id}" data-tone="${r.tone}"${r.wide ? ' data-wide' : ''}>
+      ${icon(r.icon)}
+      <div class="poster-badge">${r.badge}</div>
+      <div class="poster-title">${r.title}</div>
+      <div class="poster-desc">${r.desc}</div>
+    </div>`).join('');
+  document.querySelectorAll('.role-poster').forEach(el => {
+    const pick = () => selectRole(el.dataset.role);
+    el.addEventListener('click', pick);
+    el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } });
+  });
+}
+
+function renderProducts() {
+  const role = roles.find(r => r.id === selectedRole);
+  const reco = role ? role.reco : [];
+  const order = Object.keys(products).filter(id => id !== 'custom' || selectedRole === 'custom');
+  order.sort((a, b) => (reco.indexOf(a) === -1) - (reco.indexOf(b) === -1));
+  document.getElementById('productGrid').innerHTML = order.map(id => {
+    const p = products[id];
+    return `
+    <article class="product-card${reco.includes(id) ? ' recommended' : ''}" role="button" tabindex="0" data-product="${id}" data-tone="${p.tone}">
+      <span class="reco">Рекомендуем</span>
+      <div class="product-header">${icon(p.icon)}</div>
+      <div class="product-body">
+        <h3 class="product-title">${p.title}</h3>
+        <p class="product-desc">${p.desc}</p>
+      </div>
+    </article>`;
+  }).join('');
+  document.getElementById('productsSub').textContent = role && selectedRole !== 'custom'
+    ? `Для роли «${role.title}» подсветили подходящие сервисы`
+    : `${order.length} готовых AI-решений под вашу задачу`;
+  document.querySelectorAll('.product-card').forEach(el => {
+    const pick = () => selectProduct(el.dataset.product);
+    el.addEventListener('click', pick);
+    el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } });
+  });
+}
+
+// ---------- Логика шагов ----------
+function selectRole(id) {
+  selectedRole = id;
+  document.querySelectorAll('.role-poster').forEach(p => p.classList.toggle('selected', p.dataset.role === id));
+  renderProducts();
+  setTimeout(() => goToStep(2), 150);
+}
+
+function selectProduct(id) {
+  selectedProduct = id;
+  document.querySelectorAll('.product-card').forEach(c => c.classList.toggle('selected', c.dataset.product === id));
+  document.getElementById('productTitle').textContent = `Настройка: ${products[id].title}`;
+  document.getElementById('ideaField').hidden = id !== 'custom';
+  setTimeout(() => goToStep(3), 150);
+}
+
+function goToStep(n) {
+  document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+  document.getElementById(`step${n}`).classList.add('active');
+  document.querySelectorAll('#stepsBar span').forEach(s => {
+    const k = Number(s.dataset.step);
+    s.classList.toggle('done', k < n);
+    s.classList.toggle('current', k === n);
+  });
+  window.scrollTo({ top: document.getElementById('stepsBar').offsetTop - 80, behavior: 'smooth' });
+}
+
+function validate() {
+  let ok = true;
+  const check = (id, min) => {
+    const el = document.getElementById(id);
+    const bad = el.value.trim().length < min;
+    el.closest('.kt-ai-field').dataset.invalid = bad ? 'true' : 'false';
+    if (bad && ok) el.focus();
+    ok = ok && !bad;
+  };
+  if (selectedProduct === 'custom') check('q0', 20);
+  check('q1', 3);
+  check('q2', 3);
+  return ok;
+}
+
+document.getElementById('setupForm').addEventListener('submit', e => {
+  e.preventDefault();
+  if (!validate()) return;
+  const v = id => document.getElementById(id).value.trim();
+  const role = roles.find(r => r.id === selectedRole);
+  let base = products[selectedProduct].base.replace('{{idea}}', v('q0'));
+  const prompt = `${base}
+
+---
+ПАРАМЕТРЫ КАСТОМИЗАЦИИ:
+• Роль автора: ${role ? role.title : 'не указана'}
+• Целевая аудитория: ${v('q1')}
+• Главный приоритет: ${v('q2')}
+• Стиль интерфейса: ${v('q3')}
+• Персонализация: ${v('q4') || 'на усмотрение AI'}
+
+---
+ИНСТРУКЦИЯ ДЛЯ VIBE AI:
+1. Создай приложение по описанию выше
+2. Учти параметры кастомизации и роль автора
+3. Не используй внешние API и платные сервисы
+4. Все данные сохраняй в localStorage или data.json
+5. Опубликуй как веб-страницу в локальном git
+6. Убедись, что приложение работает автономно`;
+  document.getElementById('promptOutput').textContent = prompt;
+  goToStep(4);
+});
+
+['q0', 'q1', 'q2'].forEach(id => document.getElementById(id).addEventListener('input', e => {
+  e.target.closest('.kt-ai-field').dataset.invalid = 'false';
+}));
+
+function toast(msg) {
+  const el = document.createElement('div');
+  el.className = 'kt-ai-toast'; el.textContent = msg;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(() => el.remove(), 2500);
+}
+
+function copyPrompt() {
+  const text = document.getElementById('promptOutput').textContent;
+  const fallback = () => {
+    const out = document.getElementById('promptOutput');
+    const range = document.createRange(); range.selectNodeContents(out);
+    const sel = getSelection(); sel.removeAllRanges(); sel.addRange(range);
+    toast('Текст выделен — нажмите Ctrl+C');
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => toast('Промт скопирован!')).catch(fallback);
+  } else fallback();
+}
+
+function resetWizard() {
+  selectedRole = null; selectedProduct = null;
+  document.querySelectorAll('.role-poster, .product-card').forEach(el => el.classList.remove('selected'));
+  document.getElementById('setupForm').reset();
+  document.querySelectorAll('.kt-ai-field').forEach(f => f.dataset.invalid = 'false');
+  document.getElementById('ideaField').hidden = true;
+  goToStep(1);
+}
+
+renderRoles();
+renderProducts();
+</script>
+
+</body>
+</html>

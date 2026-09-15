@@ -1,0 +1,2090 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KT AI – прототип</title>
+<!-- ПРЕФИКС РАЗВЁРТЫВАНИЯ. Статика кита адресуется от корня ПРИЛОЖЕНИЯ, а не
+     от корня сайта: под префиксом (/cons, /dkks) файлы лежат за ним, и путь
+     «/design-system/…» уводит запрос в корень домена — 404, страница без
+     стилей и мёртвый орб. Префикс — одно свойство развёртывания, поэтому и
+     место у него одно: атрибут data-kt-ai-base на <html>. Папка статики —
+     data-kt-ai-static (по умолчанию /design-system, как было).
+
+       <html lang="ru" data-theme="light" data-kt-ai-base="/cons">
+
+     Теги пишет скрипт, а не разметка: адрес уже разобранного <link> изменить
+     нельзя — браузер начинает грузить его сразу, и под префиксом это был бы
+     гарантированный 404 перед правильным запросом. -->
+<script data-kt-ai-base-resolver>
+(function () {
+  var корень = document.documentElement;
+  function норм(значение) {
+    значение = (значение || "").trim();
+    if (!значение || значение === "/") return "";
+    if (значение.charAt(0) !== "/") значение = "/" + значение;
+    return значение.replace(/\/+$/, "");
+  }
+  var база = норм(корень.getAttribute("data-kt-ai-base"));
+  var папка = норм(корень.getAttribute("data-kt-ai-static")) || "/design-system";
+  window.ktAiBase = база;
+  window.ktAiAsset = function (имя) {
+    return /^([a-z][a-z0-9+.-]*:|\/\/)/i.test(имя) ? имя : база + папка + "/" + имя;
+  };
+})();
+</script>
+<script data-kt-ai-boot="css">
+["kt-ai-tokens.css", "kt-ai-components.css"].forEach(function (файл) {
+  var ссылка = document.createElement("link");
+  ссылка.rel = "stylesheet";
+  ссылка.href = window.ktAiAsset(файл);
+  document.head.appendChild(ссылка);
+});
+</script>
+<!-- ============================================================
+  KT AI App Shell – boilerplate типового enterprise SaaS.
+  Гидрируется из JSON-конфига (тег script#kt-app-config в body) –
+  его генерирует дизайнер-LLM AI Interviewer по brief владельца.
+  Кликабельность встроена: поиск, фильтр статусов, drawer по клику
+  на ряд, контрольное действие с подтверждением, bulk-select,
+  AI-панель с подсказками, переключатель темы, ⌘K – фокус поиска.
+  Схема конфига – см. демо ниже (все ключи опциональны, кроме
+  product/table). Канон: ../docs/DESIGN.md · ../docs/PRODUCT_CONTRACT.md · product.schema.json
+============================================================ -->
+<style>
+@layer product {
+  *, *::before, *::after { box-sizing: border-box; }
+  body { margin: 0; }
+  .shell-topbar-burger { display: none; }
+  @media (max-width: 831.98px) { .shell-topbar-burger { display: inline-flex; } }
+  /* Sidebar: верх – лого + имя решения + toggle; низ – сервисные ряды (Attio-паттерн) */
+  .sb-top { display: flex; align-items: center; gap: var(--kt-ai-space-3); padding: 2px 4px 12px; }
+  .sb-top img { width: 28px; height: 28px; border-radius: var(--kt-ai-radius-xl); flex-shrink: 0; }
+  .sb-top .nm { font-weight: var(--kt-ai-weight-semibold); font-size: var(--kt-ai-text-sm); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+  .sb-bottom { margin-top: auto; display: flex; flex-direction: column; gap: 2px; }
+  .sb-bottom .badge { margin-left: auto; font-family: var(--kt-ai-font-mono); font-size: var(--kt-ai-text-2xs); background: var(--kt-ai-primary-subtle); color: var(--kt-ai-primary); border-radius: var(--kt-ai-radius-full); padding: 0 6px; }
+  /* Низ сайдбара: тур-карточка + утилиты (Помощь, Отзыв) — паттерн ElevenLabs */
+  .sb-bottom { margin-top: auto; display: flex; flex-direction: column; gap: 2px; padding-top: var(--kt-ai-space-4); }
+  .sb-bottom button { background: none; border: none; font: inherit; color: inherit; text-align: left; cursor: pointer; width: 100%; }
+  .sb-bottom .sb-tour { display: flex; align-items: flex-start; gap: var(--kt-ai-space-4); padding: var(--kt-ai-space-4); margin-bottom: var(--kt-ai-space-3); border: 1px solid var(--kt-ai-border); border-radius: var(--kt-ai-radius-xl); background: var(--kt-ai-bg-elevated); transition: background var(--kt-ai-dur-fast) var(--kt-ai-ease-standard); }
+  .sb-bottom .sb-tour:hover { background: var(--kt-ai-bg-soft); }
+  .sb-tour .ic { display: grid; place-items: center; width: 28px; height: 28px; flex-shrink: 0; border-radius: var(--kt-ai-radius-lg); background: var(--kt-ai-primary-subtle); color: var(--kt-ai-primary); }
+  .sb-tour .tx { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+  .sb-tour .tx strong { font-size: var(--kt-ai-text-sm); font-weight: var(--kt-ai-weight-semibold); color: var(--kt-ai-fg); }
+  .sb-tour .tx span { font-size: var(--kt-ai-text-xs); color: var(--kt-ai-fg-muted); }
+  /* Политика рейла ДС (kt-ai-components.css, @media max-width 1023.98px) сюда
+     не дотягивается: компоненты лежат в @layer, а этот блок — беcслойный, и
+     беcслойное правило побеждает слоёное независимо от специфичности. Поэтому
+     свою часть рейла app-shell закрывает сам: в 52px от блока тура остаётся
+     иконка, подпись убирается. */
+  /* Диапазон задан С ДВУХ сторон: ниже 832px сайдбар — выдвижная панель во всю
+     ширину, и место под подпись там есть. Без нижней границы блок доставал до
+     телефона и оставлял от карточки тура одну иконку в панели на 232px — тот же
+     дефект, что был в политике рейла самой ДС (закрыт в 6.4.0). */
+  @media (min-width: 832px) and (max-width: 1023.98px) {
+    .sb-bottom .sb-tour { justify-content: center; padding: var(--kt-ai-space-3); border: 0; background: none; }
+    .sb-tour .tx { display: none; }
+  }
+  .sb-util[data-on="true"] { color: var(--kt-ai-primary); background: var(--kt-ai-primary-subtle); }
+  .kt-ai-shell[data-rail="true"] .sb-tour { justify-content: center; padding: var(--kt-ai-space-3); }
+  .kt-ai-shell[data-rail="true"] .sb-tour .tx { display: none; }
+  /* Онбординг-карусель (первый вход) */
+  .onb-card { position: relative; width: 420px; max-width: calc(100vw - 32px); background: var(--kt-ai-bg-elevated); border: 1px solid var(--kt-ai-border); border-radius: var(--kt-ai-radius-3xl); box-shadow: var(--kt-ai-shadow-lg); padding: var(--kt-ai-space-8); text-align: center; }
+  .onb-x { position: absolute; top: var(--kt-ai-space-4); right: var(--kt-ai-space-4); }
+  .onb-ic { width: 56px; height: 56px; margin: 0 auto var(--kt-ai-space-6); display: grid; place-items: center; border-radius: var(--kt-ai-radius-2xl); background: var(--kt-ai-primary-subtle); color: var(--kt-ai-primary); }
+  .onb-ic .kt-icon { width: 26px; height: 26px; }
+  .onb-title { font-size: var(--kt-ai-text-xl); font-weight: var(--kt-ai-weight-semibold); margin-bottom: var(--kt-ai-space-4); }
+  .onb-text { font-size: var(--kt-ai-text-sm); color: var(--kt-ai-fg-muted); line-height: var(--kt-ai-leading-normal); margin-bottom: var(--kt-ai-space-7); }
+  .onb-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--kt-ai-space-5); }
+  .onb-dots { display: flex; gap: 6px; }
+  .onb-dots span { width: 6px; height: 6px; border-radius: 50%; background: var(--kt-ai-border-strong); transition: background var(--kt-ai-dur-fast), width var(--kt-ai-dur-fast); }
+  .onb-dots span.on { background: var(--kt-ai-primary); width: 18px; border-radius: 3px; }
+  .onb-btns { display: flex; gap: var(--kt-ai-space-3); }
+  .menu-up .kt-ai-menu { top: auto; bottom: calc(100% + 4px); right: auto; left: 0; }
+  /* Ручной rail-режим (toggle в sb-top) */
+  .kt-ai-shell[data-rail="true"] { grid-template-columns: var(--kt-ai-sidebar-collapsed-width) minmax(0, 1fr); }
+  .kt-ai-shell[data-rail="true"] .nav-label, .kt-ai-shell[data-rail="true"] .kt-ai-nav-item .count,
+  .kt-ai-shell[data-rail="true"] .sb-top .nm, .kt-ai-shell[data-rail="true"] .sb-bottom .badge { display: none; }
+  .kt-ai-shell[data-rail="true"] .kt-ai-nav-item { justify-content: center; padding: 0; }
+  .kt-ai-shell[data-rail="true"] .sb-top { flex-direction: column; gap: var(--kt-ai-space-3); padding-left: 0; padding-right: 0; }
+  /* Төре-орб: кнопка ассистента в топбаре рядом с поиском */
+  .topbar-ai {
+    display: inline-flex; align-items: center; gap: var(--kt-ai-space-2); flex-shrink: 0;
+    height: 32px; padding: 0 var(--kt-ai-space-4); border-radius: var(--kt-ai-radius-full);
+    border: 1px solid var(--kt-ai-border-strong); background: var(--kt-ai-bg-elevated); color: var(--kt-ai-fg);
+    cursor: pointer; font-size: var(--kt-ai-text-sm); font-weight: var(--kt-ai-weight-medium);
+    transition: background var(--kt-ai-dur-fast);
+  }
+  .topbar-ai:hover { background: var(--kt-ai-bg-hover); }
+  .topbar-ai .orb { width: 16px; height: 16px; border-radius: 50%; background: var(--kt-ai-ai-orb); flex-shrink: 0; }
+  @media (max-width: 639.98px) { .topbar-ai { padding: 0; width: 32px; justify-content: center; } .topbar-ai .ai-label { display: none; } }
+  /* Топбар: заголовок страницы слева */
+  .topbar-title { display: flex; align-items: baseline; gap: var(--kt-ai-space-4); min-width: 0; }
+  .topbar-title .t { font-size: var(--kt-ai-text-lg); font-weight: var(--kt-ai-weight-semibold); letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .topbar-title .sub { font-size: var(--kt-ai-text-xs); color: var(--kt-ai-fg-muted); white-space: nowrap; }
+  @media (max-width: 639.98px) { .topbar-title .sub { display: none; } }
+  /* :not([data-compact]) — чтобы потолок шапки не перебивал компактный вариант:
+     у него своя ширина, и она меньше. */
+  .kt-ai-topbar .kt-ai-search-field:not([data-compact="true"]) { max-width: 240px; }
+  @media (max-width: 767.98px) { .kt-ai-topbar .kt-ai-search-field:not([data-compact="true"]) { max-width: 176px; } }
+  /* Рабочая область: больше воздуха сверху (как в React-ките) */
+  #view { width: 100%; max-width: var(--kt-ai-content-table); margin-inline: auto; padding: var(--kt-ai-stack-region) var(--kt-ai-stack-region) var(--kt-ai-space-11); }
+  @media (max-width: 639.98px) { #view { padding: var(--kt-ai-stack-group) var(--kt-ai-space-6) var(--kt-ai-space-10); } }
+  /* Hero-заголовок страницы: лого + крупное имя продукта + подпись (паритет с React KTAIShell) */
+  .page-hero { display: flex; align-items: flex-start; gap: var(--kt-ai-space-6); margin-bottom: var(--kt-ai-stack-group); }
+  .page-hero .ph-text { flex: 1; min-width: 0; }
+  .page-hero h1 { margin: 0; font-size: var(--kt-ai-text-2xl); font-weight: var(--kt-ai-weight-semibold); letter-spacing: -.01em; line-height: 1.15; }
+  .page-hero .sub { margin-top: var(--kt-ai-space-3); font-size: var(--kt-ai-text-md); color: var(--kt-ai-fg-muted); }
+  .page-hero .ph-action { flex-shrink: 0; }
+  @media (max-width: 639.98px) { .page-hero { flex-direction: column; gap: var(--kt-ai-space-5); } .page-hero h1 { font-size: var(--kt-ai-text-2xl); } }
+  .topbar-crumb { display: flex; align-items: center; gap: var(--kt-ai-space-3); min-width: 0; font-size: var(--kt-ai-text-sm); color: var(--kt-ai-fg-muted); }
+  .topbar-crumb span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .shell-panel-toggle { display: inline-flex; }
+  @media (max-width: 831.98px) { .shell-panel-toggle { display: none; } }
+  /* Кнопка создания – вверху sidebar (под брендом), на всю ширину */
+  .sb-new { margin: 0 4px var(--kt-ai-space-5); }
+  .sb-new .kt-ai-btn { width: 100%; justify-content: center; }
+  .kt-ai-shell[data-rail="true"] .sb-new .kt-ai-btn { padding: 0; }
+  /* Сетка сервисных рядов внизу: единый слот 20px под иконку/аватар – подписи на одной оси */
+  .sb-bottom .kt-ai-nav-item > .kt-icon { flex: 0 0 20px; }
+  .sb-bottom .kt-ai-avatar { width: 20px; height: 20px; font-size: 8px; flex: 0 0 20px; }
+  .sb-bottom > div:last-child { padding: var(--kt-ai-space-3) var(--kt-ai-space-4) 0; }
+  /* Мастер создания: степпер + загрузка */
+  .case-steps { margin-bottom: var(--kt-ai-space-6); overflow-x: auto; padding-bottom: 2px; }
+  .case-file { margin-top: var(--kt-ai-space-4); }
+  .menu-user { padding: var(--kt-ai-space-3) var(--kt-ai-space-4); }
+  .menu-user .nm { font-size: var(--kt-ai-text-sm); font-weight: var(--kt-ai-weight-medium); color: var(--kt-ai-fg); }
+  .menu-user .role { font-size: var(--kt-ai-text-2xs); color: var(--kt-ai-fg-muted); }
+  .notif-menu { min-width: 300px; max-width: 340px; padding: 0; }
+  .notif-menu .head { padding: var(--kt-ai-space-4) var(--kt-ai-space-5); font-size: var(--kt-ai-text-xs); font-weight: var(--kt-ai-weight-semibold); border-bottom: 1px solid var(--kt-ai-divider); }
+  .guide-steps { display: flex; flex-direction: column; gap: var(--kt-ai-space-4); margin: var(--kt-ai-space-5) 0; }
+  .guide-steps .gs { display: flex; gap: var(--kt-ai-space-4); font-size: var(--kt-ai-text-sm); align-items: flex-start; }
+  .guide-steps .gs .n { width: 20px; height: 20px; border-radius: 50%; background: var(--kt-ai-primary-subtle); color: var(--kt-ai-primary); font-size: var(--kt-ai-text-2xs); font-weight: var(--kt-ai-weight-bold); display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+  #view > .kt-ai-kpi-strip { margin-bottom: var(--kt-ai-stack-block); }
+  .toolbar-row { display: flex; align-items: center; gap: var(--kt-ai-space-4); flex-wrap: wrap; padding: 0 0 var(--kt-ai-stack-block); }
+  .toolbar-row .spacer { flex: 1; }
+  .drawer-head { display: flex; align-items: flex-start; gap: var(--kt-ai-space-4); margin-bottom: var(--kt-ai-space-6); }
+  .drawer-head .t { flex: 1; }
+  .drawer-flags { display: flex; flex-direction: column; gap: var(--kt-ai-space-3); margin: var(--kt-ai-space-6) 0; }
+  .drawer-actions { display: flex; flex-direction: column; gap: var(--kt-ai-space-4); margin-top: var(--kt-ai-space-8); }
+  /* v4.0 (Michelle): в рабочей области пара решения – инлайн, primary справа; стек – только в боковом drawer и на узких экранах */
+  .kt-ai-card .drawer-actions { flex-direction: row-reverse; justify-content: flex-start; }
+  .kt-ai-card .drawer-actions .kt-ai-btn { width: auto; }
+  @media (max-width: 639.98px) { .kt-ai-card .drawer-actions { flex-direction: column; } }
+  .ai-panel { display: flex; flex-direction: column; }
+  .ai-panel .kt-ai-chat { flex: 1; overflow-y: auto; padding-bottom: var(--kt-ai-space-6); }
+  .ai-panel-foot { margin-top: auto; display: flex; flex-direction: column; gap: var(--kt-ai-space-4); }
+  .section-stub { margin-top: var(--kt-ai-space-10); }
+  .proto-label { margin-left: auto; }
+  td .kt-ai-checkbox input, th .kt-ai-checkbox input { margin: 0; }
+  /* колонка уверенности агента: мини-метр + процент, тон по уровню */
+  .conf-cell { display: inline-flex; align-items: center; gap: var(--kt-ai-space-3); }
+  .conf-bar { width: 46px; height: 6px; border-radius: var(--kt-ai-radius-full); background: var(--kt-ai-bg-sunken); overflow: hidden; flex-shrink: 0; }
+  .conf-bar > span { display: block; height: 100%; border-radius: var(--kt-ai-radius-full); }
+  .conf-cell[data-tone="ok"] .conf-bar > span { background: var(--kt-ai-status-ok-fg); }
+  .conf-cell[data-tone="warn"] .conf-bar > span { background: var(--kt-ai-status-warn-fg); }
+  .conf-cell[data-tone="risk"] .conf-bar > span { background: var(--kt-ai-status-risk-fg); }
+  .conf-pct { font-family: var(--kt-ai-font-mono); font-size: var(--kt-ai-text-xs); color: var(--kt-ai-fg-muted); }
+  .topbar-dot { position: absolute; top: 4px; right: 4px; width: 7px; height: 7px; border-radius: 50%; background: var(--kt-ai-primary); }
+  .kt-ai-topbar .kt-ai-menu { right: 0; left: auto; top: calc(100% + 6px); }
+  /* Карточка кейса: разделы «что сделал агент» / «решение человека» (ElevenLabs detail) */
+  .drawer-sec { padding: var(--kt-ai-space-6) 0; border-top: 1px solid var(--kt-ai-divider); }
+  .drawer-sec:first-of-type { border-top: none; padding-top: 0; }
+  .drawer-sec.decision { border-top: 2px solid var(--kt-ai-border-strong); }
+  .agent-summary { margin: var(--kt-ai-space-4) 0; font-size: var(--kt-ai-text-sm); color: var(--kt-ai-fg-muted); line-height: var(--kt-ai-leading-normal); }
+  .agent-signal { display: flex; gap: var(--kt-ai-space-4); align-items: flex-start; padding: var(--kt-ai-space-3) 0; font-size: var(--kt-ai-text-sm); }
+  .agent-signal svg { color: var(--kt-ai-fg-faint); flex-shrink: 0; margin-top: 2px; }
+  .rec-box { display: flex; flex-direction: column; background: var(--kt-ai-primary-subtle); border-radius: var(--kt-ai-radius-2xl); padding: var(--kt-ai-space-5); font-size: var(--kt-ai-text-sm); margin-top: var(--kt-ai-space-4); }
+  .cell-title { font-weight: var(--kt-ai-weight-medium); }
+  .cell-sub { font-size: var(--kt-ai-text-2xs); color: var(--kt-ai-fg-muted); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row-act { text-align: right; }
+  .row-kebab { opacity: 0; transition: opacity var(--kt-ai-dur-fast); }
+  .kt-ai-table tbody tr:hover .row-kebab { opacity: 1; }
+}
+</style>
+</head>
+<body class="kt-ai-app">
+
+<script id="kt-app-config" type="application/json">
+{
+  "product": { "name": "Договоры аренды", "purpose": "Кабинет юриста · ОЦО ЮС", "entity": "договор" },
+  "user": { "name": "Нургуль Турлыбекова", "role": "Руководитель службы правового обеспечения" },
+  "notifications": [
+    { "text": "Агент подготовил 2 новых проекта договора", "time": "5 мин", "unread": true },
+    { "text": "Филиал Жезказган прислал кадастровые данные", "time": "1 ч", "unread": true },
+    { "text": "Договор АР-2026-0609 согласован в Лотусе", "time": "вчера", "unread": false }
+  ],
+  "steps": { "items": ["Заявка", "Проект агента", "Проверка юриста", "Согласование"], "current": 3 },
+  "nav": [
+    { "label": "Очередь проверки" },
+    { "label": "Реестр договоров" },
+    { "label": "Контрагентские версии" },
+    { "label": "Отчёты" }
+  ],
+  "kpis": [
+    { "value": "80", "label": "договоров / мес" },
+    { "value": "20–30 мин", "label": "проверка вместо 3–4 ч" },
+    { "value": "4", "label": "юриста в службе" }
+  ],
+  "scenario": {
+    "headline": "Очередь проверки",
+    "control": "Подтвердить и отправить на согласование",
+    "reject": "Вернуть на доработку",
+    "confirmText": "Договор уйдёт в Лотус на круг согласования.",
+    "approveTo": "approved",
+    "rejectTo": "waiting"
+  },
+  "statuses": {
+    "ready":    { "label": "готов к проверке", "tone": "info" },
+    "flags":    { "label": "есть флаги",       "tone": "warn" },
+    "waiting":  { "label": "ждёт данных",      "tone": "risk" },
+    "approved": { "label": "подтверждён",      "tone": "ok" }
+  },
+  "table": {
+    "columns": [
+      { "key": "obj",    "label": "Объект аренды", "type": "text" },
+      { "key": "branch", "label": "Филиал-инициатор" },
+      { "key": "sum",    "label": "Сумма, ₸/мес", "type": "num" },
+      { "key": "date",   "label": "Заявка",       "type": "date" },
+      { "key": "status", "label": "Статус",       "type": "status" }
+    ],
+    "rows": [
+      { "obj": "Помещение, пр. Абая 31",   "branch": "Алматы",       "sum": "1 240 000", "date": "10.06.2026", "status": "ready",
+        "_flags": ["Тариф подтверждён по SAP", "Полномочия подписанта проверены", "80% текста – типовой шаблон"] },
+      { "obj": "Офис, ул. Сатпаева 18",     "branch": "Астана",       "sum": "2 180 000", "date": "09.06.2026", "status": "flags",
+        "_flags": ["Тариф в заявке ниже актуального тарифа SAP – подставлен тариф SAP", "Срок аренды 11 мес – нетиповой"] },
+      { "obj": "Площадка, ул. Алашахана 2", "branch": "Жезказган",    "sum": "640 000",   "date": "09.06.2026", "status": "waiting",
+        "_flags": ["Нет кадастровых данных объекта – запрос отправлен инициатору"] },
+      { "obj": "Помещение, ул. Гоголя 39",  "branch": "Алматы",       "sum": "1 870 000", "date": "08.06.2026", "status": "ready",
+        "_flags": ["Проверки пройдены, отклонений нет"] },
+      { "obj": "Склад, ул. Театральная 4",  "branch": "Караганда",    "sum": "980 000",   "date": "07.06.2026", "status": "flags",
+        "_flags": ["Контрагентская версия: 3 отклонения от шаблона – п. 4.2, 6.1, 9.3"] },
+      { "obj": "Офис, ул. Айтеке би 12",    "branch": "Кызылорда",    "sum": "450 000",   "date": "06.06.2026", "status": "approved",
+        "_flags": [] },
+      { "obj": "АТС, ул. Ауэзова 141",      "branch": "Шымкент",      "sum": "1 320 000", "date": "05.06.2026", "status": "ready",
+        "_flags": ["Тариф подтверждён по SAP"] },
+      { "obj": "Помещение, ул. Желтоксан 2","branch": "Тараз",        "sum": "720 000",   "date": "04.06.2026", "status": "approved",
+        "_flags": [] }
+    ]
+  },
+  "drawer": {
+    "titleKey": "obj",
+    "fields": [
+      { "key": "branch", "label": "Филиал-инициатор" },
+      { "key": "sum",    "label": "Сумма по тарифу SAP" },
+      { "key": "date",   "label": "Дата заявки (Лотус)" }
+    ],
+    "flagsLabel": "Проверки агента"
+  },
+  "ai": {
+    "intro": "Проект договора готов: данные заявки из Лотуса, тариф из SAP, проверка по ГК РК и внутренним документам пройдена. Спросите про любой флаг.",
+    "suggestions": ["Почему флаг по тарифу?", "Что с кадастровыми данными?", "Покажи отклонения контрагента"],
+    "answers": {
+      "Почему флаг по тарифу?": "Тариф в заявке филиала ниже актуального тарифа SAP. По правилу «тариф всегда из SAP» я подставил актуальное значение и пометил расхождение флагом.",
+      "Что с кадастровыми данными?": "В заявке филиала нет кадастровых данных объекта. Я отправил запрос инициатору в Лотусе; договор остаётся в статусе «ждёт данных».",
+      "Покажи отклонения контрагента": "Контрагентская версия отличается от шаблона в трёх пунктах: 4.2 (срок оплаты 15 → 30 дней), 6.1 (ответственность сторон), 9.3 (порядок расторжения). Полный diff – в карточке договора."
+    },
+    "fallback": "В кликабельном прототипе ответы ассистента – заглушки. В рабочей версии здесь отвечает ИИ-агент по данным договора."
+  }
+}
+</script>
+
+<!-- embedded KT AI icon sprite (Lucide, monochrome) -->
+<svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden">
+  <symbol id="home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/>
+    <path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+  </symbol>
+  <symbol id="chat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/>
+  </symbol>
+  <symbol id="send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/>
+    <path d="m21.854 2.147-10.94 10.939"/>
+  </symbol>
+  <symbol id="feed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4 11a9 9 0 0 1 9 9"/>
+    <path d="M4 4a16 16 0 0 1 16 16"/>
+    <circle cx="5" cy="19" r="1"/>
+  </symbol>
+  <symbol id="lots" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="10"/>
+    <circle cx="12" cy="12" r="1"/>
+  </symbol>
+  <symbol id="source" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <ellipse cx="12" cy="5" rx="9" ry="3"/>
+    <path d="M3 5V19A9 3 0 0 0 21 19V5"/>
+    <path d="M3 12A9 3 0 0 0 21 12"/>
+  </symbol>
+  <symbol id="catalog" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 7v14"/>
+    <path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/>
+  </symbol>
+  <symbol id="decisions" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M13 5h8"/>
+    <path d="M13 12h8"/>
+    <path d="M13 19h8"/>
+    <path d="m3 17 2 2 4-4"/>
+    <path d="m3 7 2 2 4-4"/>
+  </symbol>
+  <symbol id="risk" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>
+    <path d="M12 8v4"/>
+    <path d="M12 16h.01"/>
+  </symbol>
+  <symbol id="recommender" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="10"/>
+    <circle cx="12" cy="12" r="6"/>
+    <circle cx="12" cy="12" r="2"/>
+  </symbol>
+  <symbol id="compare" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="18" cy="18" r="3"/>
+    <circle cx="6" cy="6" r="3"/>
+    <path d="M13 6h3a2 2 0 0 1 2 2v7"/>
+    <path d="M11 18H8a2 2 0 0 1-2-2V9"/>
+  </symbol>
+  <symbol id="collections" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/>
+  </symbol>
+  <symbol id="search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="m21 21-4.34-4.34"/>
+    <circle cx="11" cy="11" r="8"/>
+  </symbol>
+  <symbol id="settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M10 5H3"/>
+    <path d="M12 19H3"/>
+    <path d="M14 3v4"/>
+    <path d="M16 17v4"/>
+    <path d="M21 12h-9"/>
+    <path d="M21 19h-5"/>
+    <path d="M21 5h-7"/>
+    <path d="M8 10v4"/>
+    <path d="M8 12H3"/>
+  </symbol>
+  <symbol id="chart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 3v16a2 2 0 0 0 2 2h16"/>
+    <path d="M7 16h8"/>
+    <path d="M7 11h12"/>
+    <path d="M7 6h3"/>
+  </symbol>
+  <symbol id="table" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18"/>
+  </symbol>
+  <symbol id="sort" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="m21 16-4 4-4-4"/>
+    <path d="M17 20V4"/>
+    <path d="m3 8 4-4 4 4"/>
+    <path d="M7 4v16"/>
+  </symbol>
+  <symbol id="filter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M10 20a1 1 0 0 0 .553.895l2 1A1 1 0 0 0 14 21v-7a2 2 0 0 1 .517-1.341L21.74 4.67A1 1 0 0 0 21 3H3a1 1 0 0 0-.742 1.67l7.225 7.989A2 2 0 0 1 10 14z"/>
+  </symbol>
+  <symbol id="download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 15V3"/>
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+    <path d="m7 10 5 5 5-5"/>
+  </symbol>
+  <symbol id="chevronRight" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="m9 18 6-6-6-6"/>
+  </symbol>
+  <symbol id="external" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M15 3h6v6"/>
+    <path d="M10 14 21 3"/>
+    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+  </symbol>
+  <symbol id="help" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="10"/>
+    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+    <path d="M12 17h.01"/>
+  </symbol>
+  <symbol id="history" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+    <path d="M3 3v5h5"/>
+    <path d="M12 7v5l4 2"/>
+  </symbol>
+  <symbol id="info" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="10"/>
+    <path d="M12 16v-4"/>
+    <path d="M12 8h.01"/>
+  </symbol>
+  <symbol id="users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+    <path d="M16 3.128a4 4 0 0 1 0 7.744"/>
+    <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+    <circle cx="9" cy="7" r="4"/>
+  </symbol>
+  <symbol id="file" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/>
+    <path d="M14 2v5a1 1 0 0 0 1 1h5"/>
+    <path d="M10 9H8"/>
+    <path d="M16 13H8"/>
+    <path d="M16 17H8"/>
+  </symbol>
+  <symbol id="tool" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z"/>
+  </symbol>
+  <symbol id="model" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 20v2"/>
+    <path d="M12 2v2"/>
+    <path d="M17 20v2"/>
+    <path d="M17 2v2"/>
+    <path d="M2 12h2"/>
+    <path d="M2 17h2"/>
+    <path d="M2 7h2"/>
+    <path d="M20 12h2"/>
+    <path d="M20 17h2"/>
+    <path d="M20 7h2"/>
+    <path d="M7 20v2"/>
+    <path d="M7 2v2"/>
+    <rect x="4" y="4" width="16" height="16" rx="2"/>
+    <rect x="8" y="8" width="8" height="8" rx="1"/>
+  </symbol>
+  <symbol id="dashboard" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <rect width="7" height="9" x="3" y="3" rx="1"/>
+    <rect width="7" height="5" x="14" y="3" rx="1"/>
+    <rect width="7" height="9" x="14" y="12" rx="1"/>
+    <rect width="7" height="5" x="3" y="16" rx="1"/>
+  </symbol>
+  <symbol id="columns" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <rect width="18" height="18" x="3" y="3" rx="2"/>
+    <path d="M9 3v18"/>
+    <path d="M15 3v18"/>
+  </symbol>
+  <symbol id="more" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="1"/>
+    <circle cx="19" cy="12" r="1"/>
+    <circle cx="5" cy="12" r="1"/>
+  </symbol>
+  <symbol id="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M20 6 9 17l-5-5"/>
+  </symbol>
+  <symbol id="x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M18 6 6 18"/>
+    <path d="m6 6 12 12"/>
+  </symbol>
+  <symbol id="alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/>
+    <path d="M12 9v4"/>
+    <path d="M12 17h.01"/>
+  </symbol>
+  <symbol id="clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="10"/>
+    <path d="M12 6v6l4 2"/>
+  </symbol>
+  <symbol id="arrowRight" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M5 12h14"/>
+    <path d="m12 5 7 7-7 7"/>
+  </symbol>
+  <symbol id="panelLeftClose" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <rect width="18" height="18" x="3" y="3" rx="2"/>
+    <path d="M9 3v18"/>
+    <path d="m16 15-3-3 3-3"/>
+  </symbol>
+  <symbol id="panelLeft" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <rect width="18" height="18" x="3" y="3" rx="2"/>
+    <path d="M9 3v18"/>
+  </symbol>
+  <symbol id="trophy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M10 14.66v1.626a2 2 0 0 1-.976 1.696A5 5 0 0 0 7 21.978"/>
+    <path d="M14 14.66v1.626a2 2 0 0 0 .976 1.696A5 5 0 0 1 17 21.978"/>
+    <path d="M18 9h1.5a1 1 0 0 0 0-5H18"/>
+    <path d="M4 22h16"/>
+    <path d="M6 9a6 6 0 0 0 12 0V3a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1z"/>
+    <path d="M6 9H4.5a1 1 0 0 1 0-5H6"/>
+  </symbol>
+  <symbol id="pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/>
+    <circle cx="12" cy="10" r="3"/>
+  </symbol>
+  <symbol id="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="4"/>
+    <path d="M12 2v2"/>
+    <path d="M12 20v2"/>
+    <path d="m4.93 4.93 1.41 1.41"/>
+    <path d="m17.66 17.66 1.41 1.41"/>
+    <path d="M2 12h2"/>
+    <path d="M20 12h2"/>
+    <path d="m6.34 17.66-1.41 1.41"/>
+    <path d="m19.07 4.93-1.41 1.41"/>
+  </symbol>
+  <symbol id="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"/>
+  </symbol>
+<symbol id="menu" viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></symbol>
+  <symbol id="book" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></symbol>
+  <symbol id="rocket" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></symbol>
+  <symbol id="sparkles" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .962 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.962 0z"/></symbol>
+  <symbol id="play" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 3 20 12 6 21 6 3"/></symbol>
+  <symbol id="lightbulb" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></symbol>
+  <symbol id="plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5v14"/></symbol>
+  <symbol id="minus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/></symbol>
+  <symbol id="chevronDown" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="chevronLeft" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></symbol>
+  <symbol id="arrowLeft" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></symbol>
+  <symbol id="arrowUpDown" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></symbol>
+  <symbol id="eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="calendar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></symbol>
+  <symbol id="link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+  <symbol id="copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
+  <symbol id="trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></symbol>
+  <symbol id="pencil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></symbol>
+  <symbol id="user" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></symbol>
+  <symbol id="bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></symbol>
+  <symbol id="refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></symbol>
+  <symbol id="logout" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/></symbol>
+  <symbol id="lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+  <symbol id="mail" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></symbol>
+  <symbol id="megaphone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></symbol>
+  <symbol id="archive" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <rect width="20" height="5" x="2" y="3" rx="1" />
+    <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
+    <path d="M10 12h4" />
+  </symbol>
+  <symbol id="arrow-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M5 12h14" />
+    <path d="m12 5 7 7-7 7" />
+  </symbol>
+  <symbol id="building" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M10 12h4" />
+    <path d="M10 8h4" />
+    <path d="M14 21v-3a2 2 0 0 0-4 0v3" />
+    <path d="M6 10H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2" />
+    <path d="M6 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16" />
+  </symbol>
+  <symbol id="chevron-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="m9 18 6-6-6-6" />
+  </symbol>
+  <symbol id="alert-circle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="10" />
+    <line x1="12" x2="12" y1="8" y2="12" />
+    <line x1="12" x2="12.01" y1="16" y2="16" />
+  </symbol>
+  <symbol id="check-circle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="10" />
+    <path d="m9 12 2 2 4-4" />
+  </symbol>
+  <symbol id="clipboard" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <rect width="8" height="4" x="8" y="2" rx="1" ry="1" />
+    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+    <path d="M12 11h4" />
+    <path d="M12 16h4" />
+    <path d="M8 11h.01" />
+    <path d="M8 16h.01" />
+  </symbol>
+  <symbol id="sync" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 13v8l-4-4" />
+    <path d="m12 21 4-4" />
+    <path d="M4.393 15.269A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.436 8.284" />
+  </symbol>
+  <symbol id="database" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <ellipse cx="12" cy="5" rx="9" ry="3" />
+    <path d="M3 5V19A9 3 0 0 0 21 19V5" />
+    <path d="M3 12A9 3 0 0 0 21 12" />
+  </symbol>
+  <symbol id="spreadsheet" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" />
+    <path d="M14 2v5a1 1 0 0 0 1 1h5" />
+    <path d="M8 13h2" />
+    <path d="M14 13h2" />
+    <path d="M8 17h2" />
+    <path d="M14 17h2" />
+  </symbol>
+  <symbol id="merge" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="18" cy="18" r="3" />
+    <circle cx="6" cy="6" r="3" />
+    <path d="M6 21V9a9 9 0 0 0 9 9" />
+  </symbol>
+  <symbol id="inbox" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+    <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
+  </symbol>
+  <symbol id="layers" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z" />
+    <path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12" />
+    <path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17" />
+  </symbol>
+  <symbol id="checklist" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M13 5h8" />
+    <path d="M13 12h8" />
+    <path d="M13 19h8" />
+    <path d="m3 17 2 2 4-4" />
+    <path d="m3 7 2 2 4-4" />
+  </symbol>
+  <symbol id="package" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z" />
+    <path d="M12 22V12" />
+    <polyline points="3.29 7 12 12 20.71 7" />
+    <path d="m7.5 4.27 9 5.15" />
+  </symbol>
+  <symbol id="receipt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 17V7" />
+    <path d="M16 8h-6a2 2 0 0 0 0 4h4a2 2 0 0 1 0 4H8" />
+    <path d="M4 3a1 1 0 0 1 1-1 1.3 1.3 0 0 1 .7.2l.933.6a1.3 1.3 0 0 0 1.4 0l.934-.6a1.3 1.3 0 0 1 1.4 0l.933.6a1.3 1.3 0 0 0 1.4 0l.933-.6a1.3 1.3 0 0 1 1.4 0l.934.6a1.3 1.3 0 0 0 1.4 0l.933-.6A1.3 1.3 0 0 1 19 2a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1 1.3 1.3 0 0 1-.7-.2l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.934.6a1.3 1.3 0 0 1-1.4 0l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-1.4 0l-.934-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-.7.2 1 1 0 0 1-1-1z" />
+  </symbol>
+  <symbol id="scale" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 3v18" />
+    <path d="m19 8 3 8a5 5 0 0 1-6 0zV7" />
+    <path d="M3 7h1a17 17 0 0 0 8-2 17 17 0 0 0 8 2h1" />
+    <path d="m5 8 3 8a5 5 0 0 1-6 0zV7" />
+    <path d="M7 21h10" />
+  </symbol>
+  <symbol id="split" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M16 3h5v5" />
+    <path d="M8 3H3v5" />
+    <path d="M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3" />
+    <path d="m15 9 6-6" />
+  </symbol>
+  <symbol id="warning" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+    <path d="M12 9v4" />
+    <path d="M12 17h.01" />
+  </symbol>
+  <symbol id="upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 3v12" />
+    <path d="m17 8-5-5-5 5" />
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+  </symbol>
+  <symbol id="circleNumber0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.575" stroke-linecap="round" stroke-linejoin="round">
+    <g transform="translate(12 12) scale(1.11111) translate(-12 -12)"><path d="M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0"/><path d="M10 10v4a2 2 0 1 0 4 0v-4a2 2 0 1 0 -4 0"/></g>
+  </symbol>
+  <symbol id="circleNumber1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.575" stroke-linecap="round" stroke-linejoin="round">
+    <g transform="translate(12 12) scale(1.11111) translate(-12 -12)"><path d="M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0"/><path d="M10 10l2 -2v8"/></g>
+  </symbol>
+  <symbol id="circleNumber2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.575" stroke-linecap="round" stroke-linejoin="round">
+    <g transform="translate(12 12) scale(1.11111) translate(-12 -12)"><path d="M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0"/><path d="M10 8h3a1 1 0 0 1 1 1v2a1 1 0 0 1 -1 1h-2a1 1 0 0 0 -1 1v2a1 1 0 0 0 1 1h3"/></g>
+  </symbol>
+  <symbol id="circleNumber3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.575" stroke-linecap="round" stroke-linejoin="round">
+    <g transform="translate(12 12) scale(1.11111) translate(-12 -12)"><path d="M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0"/><path d="M10 9a1 1 0 0 1 1 -1h2a1 1 0 0 1 1 1v2a1 1 0 0 1 -1 1h-2h2a1 1 0 0 1 1 1v2a1 1 0 0 1 -1 1h-2a1 1 0 0 1 -1 -1"/></g>
+  </symbol>
+  <symbol id="circleNumber4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.575" stroke-linecap="round" stroke-linejoin="round">
+    <g transform="translate(12 12) scale(1.11111) translate(-12 -12)"><path d="M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0"/><path d="M10 8v3a1 1 0 0 0 1 1h3"/><path d="M14 8v8"/></g>
+  </symbol>
+  <symbol id="circleNumber5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.575" stroke-linecap="round" stroke-linejoin="round">
+    <g transform="translate(12 12) scale(1.11111) translate(-12 -12)"><path d="M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0"/><path d="M10 15a1 1 0 0 0 1 1h2a1 1 0 0 0 1 -1v-2a1 1 0 0 0 -1 -1h-3v-4h4"/></g>
+  </symbol>
+  <symbol id="circleNumber6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.575" stroke-linecap="round" stroke-linejoin="round">
+    <g transform="translate(12 12) scale(1.11111) translate(-12 -12)"><path d="M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0"/><path d="M14 9a1 1 0 0 0 -1 -1h-2a1 1 0 0 0 -1 1v6a1 1 0 0 0 1 1h2a1 1 0 0 0 1 -1v-2a1 1 0 0 0 -1 -1h-3"/></g>
+  </symbol>
+  <symbol id="circleNumber7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.575" stroke-linecap="round" stroke-linejoin="round">
+    <g transform="translate(12 12) scale(1.11111) translate(-12 -12)"><path d="M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0"/><path d="M10 8h4l-2 8"/></g>
+  </symbol>
+  <symbol id="circleNumber8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.575" stroke-linecap="round" stroke-linejoin="round">
+    <g transform="translate(12 12) scale(1.11111) translate(-12 -12)"><path d="M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0"/><path d="M12 12h-1a1 1 0 0 1 -1 -1v-2a1 1 0 0 1 1 -1h2a1 1 0 0 1 1 1v2a1 1 0 0 1 -1 1h-2a1 1 0 0 0 -1 1v2a1 1 0 0 0 1 1h2a1 1 0 0 0 1 -1v-2a1 1 0 0 0 -1 -1"/></g>
+  </symbol>
+  <symbol id="circleNumber9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.575" stroke-linecap="round" stroke-linejoin="round">
+    <g transform="translate(12 12) scale(1.11111) translate(-12 -12)"><path d="M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0"/><path d="M10 15a1 1 0 0 0 1 1h2a1 1 0 0 0 1 -1v-6a1 1 0 0 0 -1 -1h-2a1 1 0 0 0 -1 1v2a1 1 0 0 0 1 1h3"/></g>
+  </symbol>
+</svg>
+
+<div class="kt-ai-shell">
+  <aside class="kt-ai-sidebar" id="sidebar" style="display:flex;flex-direction:column;padding:14px 10px;gap:2px">
+    <div class="sb-top">
+      <img src="data:image/png;base64,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" alt="KT AI">
+      <span class="nm nav-label" id="brandName">…</span>
+    </div>
+    <nav id="nav" aria-label="Разделы" style="display:flex;flex-direction:column;gap:2px"></nav>
+    <div class="sb-bottom">
+      <button class="sb-tour" onclick="S.onboarding(true)" title="Как это работает">
+        <span class="ic"><svg class="kt-icon"><use href="#sparkles"></use></svg></span>
+        <span class="tx"><strong>Как это работает</strong><span class="nav-label">Тур по прототипу</span></span>
+      </button>
+      <button class="kt-ai-nav-item sb-util" onclick="S.guide()" title="Помощь и инструкция">
+        <svg class="kt-icon"><use href="#help"></use></svg><span class="nav-label">Помощь</span>
+      </button>
+      <button class="kt-ai-nav-item sb-util" data-kt-feedback-trigger title="Режим обратной связи">
+        <svg class="kt-icon"><use href="#megaphone"></use></svg><span class="nav-label" data-ktfb-label>Отзыв</span>
+      </button>
+    </div>
+  </aside>
+
+  <main class="kt-ai-main" style="min-height:100dvh;display:flex;flex-direction:column">
+    <header class="kt-ai-topbar">
+      <button class="kt-ai-icon-button shell-topbar-burger" aria-label="Меню" onclick="S.toggleSidebar()">
+        <svg class="kt-icon" viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+      </button>
+      <button class="kt-ai-icon-button shell-panel-toggle" aria-label="Свернуть меню" title="Свернуть меню" onclick="S.toggleRail()">
+        <svg class="kt-icon" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg>
+      </button>
+      <nav class="topbar-crumb"><span id="pageTitle">…</span><span id="pageSub" style="display:none"></span></nav>
+      <div class="spacer"></div>
+      <!-- id="topSearch", а НЕ "search": в документе выше вшит спрайт, и символ
+           лупы в нём назван ровно так же. getElementById возвращал символ,
+           поэтому поле шапки было мёртвым — ни фильтра, ни фокуса по сочетанию,
+           ни синхронизации значения. Гейт 20 держит id-пространство разведённым. -->
+      <div class="kt-ai-search-field" id="searchField"><input class="kt-ai-search" id="topSearch" placeholder="Поиск…"><kbd class="kt-ai-kbd" id="searchKbd" hidden></kbd></div>
+      <button class="topbar-ai" id="aiFab" aria-label="Ассистент Төре" title="Ассистент Төре" onclick="S.toggleAi()"><canvas class="kt-ai-orb" data-state="idle" style="width:20px;height:20px"></canvas></button>
+      <button class="kt-ai-theme-toggle" id="themeToggle" data-mode="light" aria-label="Переключить тему">
+        <svg class="tic tic-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+        <svg class="tic tic-moon" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+        <span class="thumb"><svg class="ic ic-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg><svg class="ic ic-moon" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg></span>
+      </button>
+      <button class="kt-ai-icon-button" id="actBtn" aria-label="Активность" title="Активность" onclick="S.toggleActivity()" style="display:none"><svg class="kt-icon"><use href="#history"></use></svg></button>
+      <div class="kt-ai-menu-anchor">
+        <button class="kt-ai-icon-button" aria-label="Уведомления" onclick="S.toggleMenu('notifMenu')" style="position:relative">
+          <svg class="kt-icon" viewBox="0 0 24 24"><path d="M18 9a6 6 0 1 0-12 0c0 7-2 7-2 9h16c0-2-2-2-2-9M10 21a2.2 2.2 0 0 0 4 0"/></svg>
+          <span class="topbar-dot" id="notifBadge" style="display:none"></span>
+        </button>
+        <div class="kt-ai-menu notif-menu" id="notifMenu" role="menu"><div class="head">Уведомления</div><div id="notifList"></div></div>
+      </div>
+      <div class="kt-ai-menu-anchor">
+        <button class="kt-ai-icon-button" aria-label="Профиль" onclick="S.toggleMenu('profileMenu')">
+          <span class="kt-ai-avatar" id="avatarBtn" style="width:24px;height:24px;font-size:9px">??</span>
+        </button>
+        <div class="kt-ai-menu" id="profileMenu" role="menu">
+          <div class="menu-user"><div class="nm" id="userName">Пользователь</div><div class="role" id="userRole"></div></div>
+          <div class="sep"></div>
+          <button role="menuitem" class="item" onclick="S.guide()"><svg class="kt-icon kt-icon-sm" viewBox="0 0 24 24"><path d="M4 19V5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2Zm0 0a2 2 0 0 0 2 2h13"/></svg>Как пользоваться прототипом</button>
+          <button role="menuitem" class="item" onclick="S.stub('Профиль')"><svg class="kt-icon kt-icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/></svg>Профиль</button>
+          <button role="menuitem" class="item" onclick="S.stub('Настройки')"><svg class="kt-icon kt-icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg>Настройки</button>
+          <div class="sep"></div>
+          <button role="menuitem" class="item" data-danger="true" onclick="S.stub('Выход')"><svg class="kt-icon kt-icon-sm" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>Выйти</button>
+        </div>
+      </div>
+    </header>
+
+    <div id="view"></div>
+  </main>
+</div>
+
+<!-- Drawer деталей записи -->
+<div class="kt-ai-drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawerTitle" tabindex="-1" style="display:none"></div>
+<div class="kt-ai-drawer" id="actPanel" role="dialog" aria-modal="false" aria-label="Активность" tabindex="-1" style="display:none"></div>
+<div class="kt-ai-menu" id="rowMenu" role="menu" style="position:fixed;z-index:40"></div>
+
+<!-- AI-панель -->
+<div class="kt-ai-drawer ai-panel" id="aiPanel" role="dialog" aria-modal="false" aria-label="Ассистент Төре" tabindex="-1" style="display:none"></div>
+
+<!-- Modal подтверждения контрольного действия -->
+<div class="kt-ai-modal-overlay" id="modal" style="display:none" onclick="if(event.target===this)S.closeModal()"></div>
+<div class="kt-ai-modal-overlay" id="onb" style="display:none" onclick="if(event.target===this)S.onbClose()"></div>
+
+
+<div class="kt-ai-toast-stack" id="toasts" role="status" aria-live="polite" aria-atomic="false"></div>
+
+<script>
+"use strict";
+/* KT AI App Shell runtime: гидрация конфига + типовые взаимодействия. */
+const CFG = JSON.parse(document.getElementById("kt-app-config").textContent);
+// морфология казахских/русских строк хрупкая → продукт может задать createLabel явно
+const createLabel = (CFG.product && CFG.product.createLabel) || ("Новый " + ((CFG.product && CFG.product.entity) || "объект"));
+const LOGO = (document.querySelector(".sb-top img") || {}).src || "";
+const S = {};
+let state = { navIndex: 0, query: "", statusFilter: "", selected: new Set(), openRow: -1 };
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+// Ключ статуса или колонки, уезжающий в inline-обработчик: onclick="S.sort('…')".
+// esc() тут не помощник — он готовит текст для РАЗМЕТКИ, а внутри атрибута
+// лежит ещё и JS-строка. Ключ с апострофом ломал бы обработчик молча: кнопка
+// есть, нажатие не делает ничего. Ключи приходят из контракта продукта, схема
+// их вид не ограничивает.
+const escJs = s => esc(String(s ?? "").replace(/\\/g, "\\\\").replace(/'/g, "\\'"));
+const statuses = CFG.statuses || {};
+const rows = (CFG.table && CFG.table.rows || []).map((r, i) => Object.assign({ _i: i }, r));
+const cols = CFG.table && CFG.table.columns || [];
+const statusCol = (cols.find(c => c.type === "status") || {}).key;
+const workflowStatusKeys = statusCol ? Array.from(new Set(rows.map(r => r[statusCol]).filter(v => v != null && v !== "").map(String))) : [];
+const filterKeys = (Array.isArray(CFG.filterKeys) && CFG.filterKeys.length ? CFG.filterKeys.map(String) : workflowStatusKeys).filter(k => statuses[k]).slice(0, 4);
+
+function statusTag(key) {
+  const st = statuses[key] || { label: key, tone: "info" };
+  return '<span class="kt-ai-status-pill" data-status="' + esc(st.tone) + '">' + esc(st.label) + "</span>";
+}
+function confCell(v) {
+  const n = parseInt(String(v == null ? "" : v).replace(/[^\d]/g, ""), 10);
+  const pct = isNaN(n) ? 0 : Math.max(0, Math.min(100, n));
+  const tone = pct >= 80 ? "ok" : pct >= 60 ? "warn" : "risk";
+  return '<span class="conf-cell" data-tone="' + tone + '"><span class="conf-bar"><span style="width:' + pct + '%"></span></span>' +
+    '<span class="conf-pct">' + esc(v == null || v === "" ? "—" : v) + "</span></span>";
+}
+function cellHtml(row, col) {
+  const v = row[col.key];
+  if (col.type === "status") return statusTag(v);
+  if (col.type === "confidence") return confCell(v);
+  if (col.type === "num") return '<span class="kt-ai-num">' + esc(v) + "</span>";
+  if (col.type === "date") { const m = String(v).match(/(\d{4})-(\d{2})-(\d{2})/); return '<span class="kt-ai-num" style="font-size:var(--kt-ai-text-xs)">' + esc(m ? m[3] + "." + m[2] : v) + "</span>"; }
+  // двухстрочная entity-ячейка (ElevenLabs): значение + muted-подзаголовок из col.sub
+  if (col.sub && row[col.sub] != null && row[col.sub] !== "") return '<div class="cell-title">' + esc(v) + '</div><div class="cell-sub">' + esc(row[col.sub]) + "</div>";
+  return esc(v);
+}
+
+// Универсальный диапазон дат: фильтрует строки (→ таблица И график) по dateKey графика.
+function parseDate(s) { const m = String(s == null ? "" : s).match(/(\d{4})-(\d{2})-(\d{2})/); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; }
+function dateBounds() {
+  const key = (CFG.chart || {}).dateKey;
+  if (!key) return null;
+  const ds = rows.map(r => parseDate(r[key])).filter(Boolean);
+  if (!ds.length) return null;
+  const end = new Date(Math.max(...ds.map(d => d.getTime())));
+  const days = state.dateRange == null ? 30 : state.dateRange;
+  if (!days) return { start: new Date(Math.min(...ds.map(d => d.getTime()))), end, days: 0, key };
+  const start = new Date(end); start.setDate(start.getDate() - (days - 1));
+  return { start, end, days, key };
+}
+function visibleRows() {
+  const q = state.query.toLowerCase();
+  const db = dateBounds();
+  let out = rows.filter(r => {
+    if (db) { const d = parseDate(r[db.key]); if (d && (d < db.start || d > db.end)) return false; }
+    if (state.statusFilter && r[statusCol] !== state.statusFilter) return false;
+    if (!q) return true;
+    return cols.some(c => String(r[c.key] ?? "").toLowerCase().includes(q));
+  });
+  const s = state.sort;
+  if (s && s.key) {
+    const col = cols.find(c => c.key === s.key), num = col && col.type === "num";
+    out = out.slice().sort((a, b) => {
+      let av = a[s.key], bv = b[s.key];
+      if (num) { av = parseFloat(String(av).replace(/[^\d.-]/g, "")) || 0; bv = parseFloat(String(bv).replace(/[^\d.-]/g, "")) || 0; }
+      else { av = String(av ?? "").toLowerCase(); bv = String(bv ?? "").toLowerCase(); }
+      return av < bv ? (s.dir === "asc" ? -1 : 1) : av > bv ? (s.dir === "asc" ? 1 : -1) : 0;
+    });
+  }
+  return out;
+}
+S.sort = key => {
+  const s = state.sort;
+  state.sort = (s && s.key === key) ? (s.dir === "asc" ? { key, dir: "desc" } : null) : { key, dir: "asc" };
+  state.page = 1;
+  render();
+};
+S.page = n => { state.page = n; render(); };
+S.setRange = d => { state.dateRange = d; state.page = 1; render(); };
+
+/* ---------- Топбар: меню, профиль, уведомления, гид ---------- */
+S.closeMenus = () => document.querySelectorAll(".kt-ai-menu[data-open='true']").forEach(m => { m.dataset.open = "false"; });
+S.toggleMenu = id => {
+  const m = $(id), was = m.dataset.open === "true";
+  S.closeMenus();
+  if (!was) m.dataset.open = "true";
+  if (id === "notifMenu" && !was) $("notifBadge").style.display = "none";
+};
+S.toggleRail = () => { const sh = document.querySelector(".kt-ai-shell"); sh.dataset.rail = sh.dataset.rail === "true" ? "false" : "true"; };
+S.stub = label => { S.closeMenus(); toast(label + " – раздел-заглушка прототипа", ""); };
+S.guide = () => {
+  S.closeMenus();
+  const sc = CFG.scenario || {};
+  $("modal").innerHTML = '<div class="kt-ai-modal"><div class="modal-title">Как пользоваться прототипом</div>' +
+    '<div class="kt-ai-meta" style="margin-bottom:4px">' + esc(CFG.product.purpose || CFG.product.name) + ". Кликабелен один сквозной сценарий:</div>" +
+    '<div class="guide-steps">' +
+    '<div class="gs"><span class="n">1</span><span>Откройте запись в «' + esc(sc.headline || "списке") + '» – детали и проверки агента справа</span></div>' +
+    '<div class="gs"><span class="n">2</span><span>Изучите флаги агента и спросите ассистента (кнопка вверху) про любой из них</span></div>' +
+    '<div class="gs"><span class="n">3</span><span>Контрольное действие – «' + esc(sc.control || "Подтвердить") + '»: решение всегда за человеком</span></div>' +
+    "</div>" +
+    '<div class="kt-ai-meta">Данные – правдоподобные примеры по brief; разделы вне сценария – заглушки.</div>' +
+    '<div class="modal-actions"><button class="kt-ai-btn" data-variant="primary" onclick="S.closeModal()">Понятно</button></div></div>';
+  $("modal").style.display = "flex";
+};
+// Онбординг-карусель: 2-3 слайда при первом входе; повтор — из тур-карточки в сайдбаре. Контракт может задать свой CFG.onboarding.
+const ONB = (CFG.onboarding && CFG.onboarding.length) ? CFG.onboarding : [
+  { icon: "sparkles", title: CFG.product.name, text: CFG.product.purpose || "Рабочее пространство KT AI." },
+  { icon: "eye", title: "Как пользоваться", text: "Откройте запись в списке — справа появится карточка с разбором и рекомендацией. Решение принимаете вы." },
+  { icon: "megaphone", title: "Оставьте отзыв", text: "Внизу слева — «Отзыв»: включите режим, кликайте по элементам экрана и оставляйте заметки, затем экспортируйте их в markdown для аналитика." }
+];
+let onbIdx = 0;
+const onbKey = "kt-onb:" + (CFG.product.name || "");
+S.onboarding = (force) => {
+  if (!force) { try { if (localStorage.getItem(onbKey)) return; } catch (e) {} }
+  onbIdx = 0; S.onbRender(); $("onb").style.display = "flex";
+};
+S.onbRender = () => {
+  const s = ONB[onbIdx], last = onbIdx === ONB.length - 1;
+  $("onb").innerHTML = '<div class="onb-card" role="dialog" aria-modal="true" aria-label="Знакомство с прототипом">' +
+    '<button class="kt-ai-icon-button onb-x" aria-label="Закрыть" onclick="S.onbClose()"><svg class="kt-icon"><use href="#x"></use></svg></button>' +
+    '<div class="onb-ic"><svg class="kt-icon"><use href="#' + esc(s.icon || "sparkles") + '"></use></svg></div>' +
+    '<div class="onb-title">' + esc(s.title) + "</div>" +
+    '<div class="onb-text">' + esc(s.text) + "</div>" +
+    '<div class="onb-foot"><div class="onb-dots">' + ONB.map((_, i) => '<span class="' + (i === onbIdx ? "on" : "") + '"></span>').join("") + "</div>" +
+    '<div class="onb-btns">' + (onbIdx > 0 ? '<button class="kt-ai-btn" onclick="S.onbGo(-1)">Назад</button>' : "") +
+    '<button class="kt-ai-btn" data-variant="primary" onclick="' + (last ? "S.onbClose()" : "S.onbGo(1)") + '">' + (last ? "Понятно" : "Далее") + "</button></div></div></div>";
+};
+S.onbGo = (d) => { onbIdx = Math.max(0, Math.min(ONB.length - 1, onbIdx + d)); S.onbRender(); };
+S.onbClose = () => { $("onb").style.display = "none"; try { localStorage.setItem(onbKey, "1"); } catch (e) {} };
+/* Автопоказ онбординга выключен: модалка поверх рабочего экрана — преграда,
+   а не помощь. Тур открывается карточкой «Как это работает» в сайдбаре. */
+S.maybeOnboarding = () => {};
+// Сочетание называется так, как оно нажимается на этой машине. «⌘K» на
+// Windows и Linux — подпись не от той клавиатуры: обработчик слушает и Ctrl,
+// а в поле написано другое.
+function сочетаниеПоиска() {
+  const эппл = typeof navigator !== "undefined" &&
+    /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent || "");
+  return эппл ? "⌘K" : "Ctrl K";
+}
+// Поиск в шапке: подсказка сочетания — элемент, а не текст в placeholder.
+// Раньше «⌘K» стояло прямо в placeholder, и убрать его продукт не мог никак:
+// на проде поле занимало место, которого в шапке нет (заявка DS-011).
+function renderSearch() {
+  const с = CFG.search || {};
+  const поле = $("searchField"), ввод = $("topSearch"), бейдж = $("searchKbd");
+  if (!поле) return;
+  ввод.placeholder = с.placeholder || "Поиск…";
+  поле.setAttribute("data-compact", с.compact === true);
+  // Бейдж показывается только там, где сочетание действительно работает:
+  // подпись сочетания, которое выключено, — обещание (правило 9d).
+  const есть = с.shortcut !== false && с.compact !== true;
+  бейдж.hidden = !есть;
+  бейдж.textContent = есть ? сочетаниеПоиска() : "";
+  поле.setAttribute("data-shortcut", есть);
+  // В компактном виде о сочетании не написано, но оно работает — назовём его
+  // там, где место есть.
+  ввод.title = с.shortcut === false ? "" : "Поиск (" + сочетаниеПоиска() + ")";
+}
+
+function renderTop() {
+  renderSearch();
+  $("brandName").textContent = CFG.product.name;
+  $("actBtn").style.display = (CFG.activity && CFG.activity.length) ? "inline-flex" : "none";
+  const u = CFG.user || {};
+  const name = u.name || "Пользователь";
+  $("userName").textContent = name;
+  $("userRole").textContent = u.role || "";
+  $("avatarBtn").textContent = name.split(/\s+/).map(w => w[0]).slice(0, 2).join("").toUpperCase();
+  const open = rows.filter(r => statusCol && (statuses[r[statusCol]] || {}).tone !== "ok").length;
+  const notifs = (Array.isArray(CFG.notifications) && CFG.notifications.length ? CFG.notifications
+    : [{ text: open + " записей ждут решения", time: "сейчас", unread: true }]).filter(n => n && n.text);
+  $("notifList").innerHTML = notifs.map(n =>
+    '<div class="kt-ai-notif-item" data-unread="' + (n.unread !== false) + '">' + esc(n.text) +
+    '<span class="time">' + esc(n.time || "") + "</span></div>").join("");
+  const unread = notifs.filter(n => n.unread !== false).length;
+  $("notifBadge").style.display = unread ? "" : "none";
+}
+/* Степпер этапов (для мастера создания). config.steps = {items:[...]} */
+function stepperHtml(cur) {
+  const st = CFG.steps;
+  if (!st || !Array.isArray(st.items) || !st.items.length) return "";
+  return '<div class="kt-ai-stepper case-steps" style="flex-wrap:nowrap">' + st.items.map((x, i) => {
+    const state = i + 1 < cur ? "done" : (i + 1 === cur ? "current" : "");
+    return '<div class="kt-ai-step-item"' + (state ? ' data-state="' + state + '"' : "") + '><span class="n">' +
+      (i + 1 < cur ? "✓" : (i + 1)) + "</span>" + esc(x) + "</div>" +
+      (i < st.items.length - 1 ? '<span class="kt-ai-step-sep"></span>' : "");
+  }).join("") + "</div>";
+}
+
+/* Мастер создания: этап 1 – заявка + документы (dropzone из ДС) */
+S.newCase = () => {
+  S.closeMenus();
+  const entity = CFG.product.entity || "запись";
+  $("modal").innerHTML = '<div class="kt-ai-modal"><div class="modal-title">' +
+    esc(createLabel) + "</div>" + stepperHtml(1) +
+    '<div class="kt-ai-dropzone" id="caseDz" ondragover="event.preventDefault();this.dataset.drag=\'true\'" ondragleave="this.dataset.drag=\'\'" ondrop="event.preventDefault();this.dataset.drag=\'\';S.caseAttach()" onclick="S.caseAttach()">' +
+    '<svg class="kt-icon kt-icon-lg" viewBox="0 0 24 24"><path d="M12 16V4m0 0l-4 4m4-4l4 4"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>' +
+    'Перетащите заявку или документы<br><span class="kt-ai-meta">заявка из Лотуса, регламент, шаблон – агент извлечёт данные</span></div>' +
+    '<div id="caseFiles"></div>' +
+    '<div class="modal-actions"><button class="kt-ai-btn" onclick="S.closeModal()">Отмена</button>' +
+    '<button class="kt-ai-btn" data-variant="primary" id="caseSubmit" disabled onclick="S.caseCreate()">Создать черновик</button></div></div>';
+  $("modal").style.display = "flex";
+};
+S.caseAttach = () => {
+  if ($("caseFiles").children.length) return;
+  $("caseFiles").innerHTML = '<div class="kt-ai-file-row case-file">' +
+    '<svg class="kt-icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>' +
+    "Заявка_" + esc(CFG.product.entity || "документ") + '.docx <span class="size">96 КБ</span></div>';
+  $("caseSubmit").disabled = false;
+};
+S.caseCreate = () => {
+  S.closeModal();
+  toast("Черновик создан – агент готовит " + esc(CFG.product.entity || "запись"), "ok");
+  const b = $("notifBadge");
+  b.style.display = ""; b.textContent = (parseInt(b.textContent, 10) || 0) + 1;
+  $("notifList").insertAdjacentHTML("afterbegin",
+    '<div class="kt-ai-notif-item" data-unread="true">Новый ' + esc(CFG.product.entity || "объект") + ': агент извлекает данные из заявки<span class="time">сейчас</span></div>');
+};
+
+/* Орб рисует kt-ai-orb.js — один файл на оба рантайма.
+   Здесь лежала вторая копия анимации, целиком мёртвая: она искала $("orbCanvas"),
+   а такого id в разметке нет — у канваса шапки только класс. Копия не выполнялась
+   ни разу, но ехала в каждый прототип и расходилась с настоящим орбом (свои
+   константы, своя палитра, свой цикл кадров). kt-ai-orb.js монтирует все
+   canvas.kt-ai-orb сам, на DOMContentLoaded. */
+document.addEventListener("click", e => { if (!e.target.closest(".kt-ai-menu-anchor")) S.closeMenus(); });
+
+// Заголовок группы (`nav[].group`) — НЕ пункт: он не кликается и в нумерации
+// не участвует. Переход идёт по индексу пункта (S.nav(i)), поэтому индекс
+// берётся из исходного массива, а заголовок только вставляется перед пунктом,
+// у которого группа сменилась. Вставить заголовок отдельным пунктом было
+// нельзя — он сдвинул бы нумерацию, и state.navIndex перестал бы совпадать
+// с разделом.
+function renderNav() {
+  document.title = CFG.product.name + " · прототип KT AI";
+  let группа = null;
+  $("nav").innerHTML = (CFG.nav || [{ label: "Главная" }]).map((n, i) => {
+    let head = "";
+    if (n.group && n.group !== группа) {
+      // data-rail="keep" — чтобы в полосе значков заголовок не исчез вместе со
+      // своим разделителем: структурное правило рейла снимает всё без иконки.
+      head = '<div class="kt-ai-nav-group" data-rail="keep"><span class="nav-label">' + esc(n.group) + "</span></div>";
+    }
+    if (n.group) группа = n.group; else группа = null;
+    return head +
+    '<div class="kt-ai-nav-item" role="link" tabindex="0" data-active="' + (i === state.navIndex) + '"' + (i === state.navIndex ? ' aria-current="page"' : "") + ' onclick="S.nav(' + i + ')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();S.nav(' + i + ')}">' +
+    '<svg class="kt-icon" aria-hidden="true"><use href="#' + esc(n.icon || "lots") + '"></use></svg>' +
+    '<span class="nav-label">' + esc(n.label) + "</span>" +
+    (n.count != null ? '<span class="count">' + esc(n.count) + "</span>" : "") +
+    "</div>";
+  }).join("") +
+    // v4.0 (Michelle): одноразделный прототип – сайдбар не пустует, тихо объясняет агента
+    (((CFG.nav || []).length <= 1 && CFG.scenario && CFG.scenario.confirmText)
+      ? '<div style="margin:var(--kt-ai-space-6) var(--kt-ai-space-4) 0;padding:var(--kt-ai-space-4) var(--kt-ai-space-5);border:1px solid var(--kt-ai-border);border-radius:var(--kt-ai-radius-lg);background:var(--kt-ai-bg-elevated)">' +
+        '<div class="kt-ai-label" style="margin-bottom:4px">Контроль человека</div>' +
+        '<div class="kt-ai-meta" style="line-height:1.5">' + esc(CFG.scenario.confirmText) + "</div></div>"
+      : "");
+}
+
+// Сводный bar-chart над таблицей (видео Kole Jain: «data drives the form»).
+// chart.groupBy=<колонка> → бары считаются из фильтрованных строк и адаптируются к выбранному табу.
+function renderChart(ch, rowsForChart) {
+  if (!ch) return "";
+  let data = ch.bars || [], total = ch.total, cat = false;
+  if (ch.bucket === "day" && ch.dateKey) {
+    // раскат по дням за выбранный диапазон; rowsForChart уже отфильтрованы (диапазон+таб+поиск)
+    const db = dateBounds(), buckets = {};
+    if (db) for (let d = new Date(db.start); d <= db.end; d.setDate(d.getDate() + 1)) buckets[d.toISOString().slice(0, 10)] = 0;
+    (rowsForChart || []).forEach(r => { const d = parseDate(r[ch.dateKey]); if (d) { const k = d.toISOString().slice(0, 10); if (k in buckets) buckets[k]++; } });
+    const keys = Object.keys(buckets).sort();
+    data = keys.map(k => ({ label: String(+k.slice(8, 10)), value: buckets[k] }));
+    total = String((rowsForChart || []).length);
+  } else if (ch.groupBy) {
+    const g = {};
+    (rowsForChart || []).forEach(r => { const v = r[ch.groupBy]; const k = (v == null || v === "") ? "—" : String(v); g[k] = (g[k] || 0) + 1; });
+    data = Object.keys(g).map(k => ({ label: k, value: g[k] }));
+    total = String((rowsForChart || []).length);
+    cat = true;
+  }
+  if (!data.length) return "";
+  const colorVar = ({ blue: "--kt-ai-chart-blue", green: "--kt-ai-chart-green", orange: "--kt-ai-chart-orange", salmon: "--kt-ai-chart-salmon", pink: "--kt-ai-chart-pink", primary: "--kt-ai-primary" })[ch.color] || "--kt-ai-chart-blue";
+  const max = Math.max(1, ...data.map(b => +b.value || 0));
+  const bars = data.map(b => '<div class="cc-bar"' + tipAttr(b) + '><i style="height:' + Math.round((+b.value || 0) / max * 100) + '%"></i></div>').join("");
+  let axis;
+  if (cat || data.length <= 8) {
+    axis = '<div class="cc-axis cc-axis-cat">' + data.map(b => '<span title="' + esc(b.label || "") + '">' + esc(b.label || "") + "</span>").join("") + "</div>";
+  } else {
+    const n = data.length, step = Math.max(1, Math.ceil(n / 7));
+    axis = '<div class="cc-axis">' + data.map((b, i) => (i % step === 0 || i === n - 1) ? "<span>" + esc(b.label || "") + "</span>" : "").filter(Boolean).join("") + "</div>";
+  }
+  return '<section class="kt-ai-chart-card" style="--cc-color:var(' + colorVar + ')">' +
+    '<div class="cc-head"><div><div class="cc-title">' + esc(ch.title || "") + "</div>" +
+    (total ? '<div class="cc-total"><span class="num">' + esc(total) + "</span>" + (ch.unit ? '<span class="unit">' + esc(ch.unit) + "</span>" : "") + "</div>" : "") + "</div>" +
+    (ch.link ? '<button class="cc-link" type="button" onclick="toast(\'' + esc(ch.link) + " – заглушка прототипа','')\">" + esc(ch.link) + ' →</button>' : "") + "</div>" +
+    '<div class="cc-bars">' + bars + "</div>" + axis + "</section>";
+}
+
+function renderMain() {
+  const sc = CFG.scenario || {};
+  const segs = ['<button class="seg" data-active="' + (state.statusFilter === "") + '" onclick="S.filter(\'\')">Все</button>']
+    .concat(filterKeys.map(k =>
+      '<button class="seg" data-active="' + (state.statusFilter === k) + '" onclick="S.filter(\'' + escJs(k) + '\')">' + esc(statuses[k].label) + "</button>"));
+  const vis = visibleRows();
+  const pageSize = (CFG.table && CFG.table.pageSize) || 12;
+  const pageCount = Math.max(1, Math.ceil(vis.length / pageSize));
+  if (!state.page || state.page > pageCount) state.page = 1;
+  const pageRows = vis.slice((state.page - 1) * pageSize, state.page * pageSize);
+  const selVisible = vis.filter(r => state.selected.has(r._i)).length;
+
+  $("pageTitle").textContent = sc.headline || CFG.product.name;
+  $("pageSub").textContent = CFG.product.purpose || "";
+  let html = "";
+
+  // системный баннер «что-почему-что делать» + действие (не статичный текст)
+  if (CFG.banner && CFG.banner.text) {
+    const b = CFG.banner;
+    const act = b.action ? '<button class="kt-ai-btn" data-size="sm" onclick="' +
+      (b.actionNav != null ? "S.nav(" + b.actionNav + ")" : "S.bannerAction()") + '">' + esc(b.action) + " →</button>" : "";
+    html += '<div class="kt-ai-banner" data-tone="' + esc(b.tone || "info") +
+      '" style="margin-bottom:var(--kt-ai-stack-group);display:flex;align-items:center;gap:var(--kt-ai-space-5)">' +
+      '<span style="flex:1;min-width:0">' + esc(b.text) + "</span>" + act + "</div>";
+  }
+
+  if (CFG.kpis && CFG.kpis.length) {
+    html += '<div class="kt-ai-kpi-strip" data-cards="true">' + CFG.kpis.map(k => kpiHtml(k)).join("") + "</div>";
+  }
+
+  // Табы НАД графиком — график адаптируется к выбранному табу (раскат по фильтрованным строкам)
+  // Универсальный фильтр диапазона дат (если у графика есть dateKey) — фильтрует и таблицу, и график
+  const curRange = state.dateRange == null ? 30 : state.dateRange;
+  const rangeCtl = (CFG.chart && CFG.chart.dateKey) ? '<div class="kt-ai-segmented range-seg">' +
+    [[7, "7 дней"], [30, "30 дней"], [90, "90 дней"], [0, "Всё"]].map(o => '<button class="seg" data-active="' + (curRange === o[0]) + '" onclick="S.setRange(' + o[0] + ')">' + o[1] + "</button>").join("") + "</div>" : "";
+  html += '<div class="toolbar-row"><div class="kt-ai-segmented">' + segs.join("") + '</div><div class="spacer"></div>' +
+    rangeCtl + '<span class="kt-ai-meta">' + vis.length + " из " + rows.length + "</span></div>";
+
+  html += renderChart(CFG.chart, vis);
+
+  html += '<div class="kt-ai-table-wrap" data-framed="true">' +
+    '<div class="kt-ai-table-bulkbar" data-open="' + (selVisible > 0) + '"><span class="count">' + selVisible + ' выбрано</span>' +
+    '<button class="kt-ai-btn" data-size="sm" onclick="S.bulkApprove()">' + esc(sc.control || "Подтвердить") + "</button>" +
+    '<button class="kt-ai-btn" data-size="sm" data-variant="ghost" onclick="S.clearSel()">Снять выбор</button></div>';
+
+  if (!vis.length) {
+    // первый запуск (данных ещё нет) отличаем от «фильтр ничего не нашёл»
+    const zeroData = rows.length === 0;
+    const icon = zeroData
+      ? '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 16h6"/>'
+      : '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>';
+    html += '<div class="kt-ai-empty"><div class="icon-spot"><svg class="kt-icon kt-icon-lg" viewBox="0 0 24 24">' + icon + '</svg></div>' +
+      '<span class="title">' + (zeroData ? "Пока нет записей" : "Ничего не найдено") + '</span>' +
+      '<span>' + (zeroData ? "Здесь появятся объекты, как только агент их обработает" : "Измените поиск или фильтр статуса") + '</span></div></div>';
+  } else {
+    // Ширина колонки = по содержимому (из ВСЕХ строк → стабильно при фильтрах), с клампом по типу. column.width — явный override.
+    const colw = c => {
+      if (c.width) return c.width;
+      if (c.type === "num") return "92px";
+      if (c.type === "date") return "116px";
+      if (c.type === "status") {
+        const keys = (c.values && c.values.length) ? c.values : Object.keys(statuses);
+        const m = Math.max(7, ...keys.map(k => String((statuses[k] || {}).label || k).length));
+        return Math.min(180, Math.round(m * 7.2 + 42)) + "px";
+      }
+      let m = String(c.label || "").length;
+      for (const r of rows) {
+        m = Math.max(m, String(r[c.key] == null ? "" : r[c.key]).length);
+        if (c.sub) m = Math.max(m, String(r[c.sub] == null ? "" : r[c.sub]).length);
+      }
+      return Math.min(300, Math.max(88, Math.round(m * 7 + 28))) + "px";
+    };
+    const kebab = '<svg class="kt-icon kt-icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="12" cy="19" r="1.4"/></svg>';
+    html += '<table class="kt-ai-table" style="table-layout:fixed">' +
+      '<colgroup><col style="width:40px">' + cols.map(c => "<col" + (colw(c) ? ' style="width:' + colw(c) + '"' : "") + ">").join("") + '<col style="width:48px"></colgroup>' +
+      '<thead><tr><th scope="col"><span class="kt-ai-sr-only">Выбор</span></th>' +
+      cols.map(c => {
+        const a = c.align || (c.type === "num" ? "right" : "left");   // выравнивание: num по умолчанию справа, column.align — override
+        const align = a !== "left" ? ' style="text-align:' + a + '"' : "";
+        if (!c.sortable) return '<th scope="col"' + align + ">" + esc(c.label) + "</th>";
+        const on = state.sort && state.sort.key === c.key, dir = on ? state.sort.dir : "";
+        return '<th scope="col"' + align + (on ? ' aria-sort="' + (dir === "asc" ? "ascending" : "descending") + '"' : "") +
+          '><button class="th-sort" type="button" onclick="S.sort(\'' + escJs(c.key) + '\')">' + esc(c.label) +
+          '<svg class="kt-icon th-sort-ic" data-dir="' + dir + '"><use href="#' + (on ? "chevronDown" : "arrowUpDown") + '"></use></svg></button></th>';
+      }).join("") + '<th scope="col"><span class="kt-ai-sr-only">Действия</span></th>' +
+      "</tr></thead><tbody>" +
+      pageRows.map(r => '<tr data-dim="' + (statusCol && statuses[r[statusCol]] && statuses[r[statusCol]].dim ? "true" : "false") + '" onclick="S.open(' + r._i + ')" style="cursor:pointer">' +
+        '<td class="cell-select" onclick="event.stopPropagation()"><label class="kt-ai-checkbox"><input type="checkbox" ' + (state.selected.has(r._i) ? "checked" : "") + ' onchange="S.sel(' + r._i + ',this.checked)"></label></td>' +
+        cols.map(c => { const a = c.align || (c.type === "num" ? "right" : "left"); return '<td data-label="' + esc(c.label) + '"' + (c.type === "num" ? ' class="num"' : "") + (a !== "left" ? ' style="text-align:' + a + '"' : "") + ">" + cellHtml(r, c) + "</td>"; }).join("") +
+        '<td class="row-act" onclick="event.stopPropagation()"><button class="kt-ai-icon-button row-kebab" aria-label="Действия" onclick="S.rowMenu(' + r._i + ',event)">' + kebab + "</button></td>" +
+        "</tr>").join("") +
+      "</tbody></table></div>";
+    if (pageCount > 1) {
+      let pages = "";
+      for (let p = 1; p <= pageCount; p++) pages += '<button class="page-btn" data-active="' + (p === state.page) + '" onclick="S.page(' + p + ')">' + p + "</button>";
+      const from = (state.page - 1) * pageSize + 1, to = Math.min(state.page * pageSize, vis.length);
+      html += '<div class="table-foot"><span class="kt-ai-meta">' + from + "–" + to + " из " + vis.length + "</span>" +
+        '<div class="kt-ai-pagination"><button class="page-btn" ' + (state.page === 1 ? "disabled" : "") + ' aria-label="Назад" onclick="S.page(' + (state.page - 1) + ')">‹</button>' +
+        pages + '<button class="page-btn" ' + (state.page === pageCount ? "disabled" : "") + ' aria-label="Вперёд" onclick="S.page(' + (state.page + 1) + ')">›</button></div></div>';
+    }
+  }
+  return html;
+}
+
+function renderStub(label) {
+  $("pageTitle").textContent = label;
+  $("pageSub").textContent = CFG.product.purpose || "";
+  return '<div class="kt-ai-card section-stub" style="margin-top:0"><div class="kt-ai-empty">' +
+    '<div class="icon-spot"><svg class="kt-icon kt-icon-lg" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/></svg></div>' +
+    '<span class="title">Раздел обозначен в концепте</span>' +
+    '<span>Детализирован будет после подтверждения сценария «' + esc((CFG.scenario || {}).headline || "") + '»</span>' +
+    '<button class="kt-ai-btn" data-size="sm" onclick="S.nav(0)">К главному сценарию</button></div></div>';
+}
+
+// Документ-артефакт (что продукт ПРОИЗВОДИТ): карточка с иконкой, статусом и кнопкой «Скачать».
+function docCard(dd, objName) {
+  const fmt = dd.format ? String(dd.format).toUpperCase() : "";
+  const sub = [objName, dd.status, fmt].filter(Boolean).map(esc).join(" · ");
+  const dlName = (dd.label + (objName ? " — " + objName : "")).replace(/['"]/g, "");
+  return '<div class="kt-ai-doc"><span class="doc-ic"><svg class="kt-icon"><use href="#file"></use></svg></span>' +
+    '<span class="doc-meta"><span class="doc-name">' + esc(dd.label) + "</span>" +
+    (sub ? '<span class="doc-sub">' + sub + "</span>" : "") + "</span>" +
+    '<button class="kt-ai-btn" data-size="sm" onclick="S.downloadDoc(\'' + esc(dlName) + '\')"><svg class="kt-icon kt-icon-sm"><use href="#download"></use></svg>Скачать</button></div>';
+}
+// Секция-коллекция документов одного типа по всем записям (nav.view="documents", nav.docType).
+function renderDocs(navItem) {
+  const docType = navItem.docType;
+  const titleKey = (CFG.drawer && CFG.drawer.titleKey) || (cols[0] && cols[0].key);
+  const items = [];
+  rows.forEach(r => (Array.isArray(r._docs) ? r._docs : []).forEach(dd => { if (!docType || dd.type === docType) items.push({ dd, name: r[titleKey] }); }));
+  if (!items.length) return '<div class="kt-ai-card" style="margin-top:0"><div class="kt-ai-empty">' +
+    '<div class="icon-spot"><svg class="kt-icon kt-icon-lg"><use href="#file"></use></svg></div>' +
+    '<span class="title">Документов пока нет</span><span>Появятся, когда агент сформирует их по предложениям</span></div></div>';
+  return '<div class="kt-ai-doc-list">' + items.map(it => docCard(it.dd, it.name)).join("") + "</div>";
+}
+S.downloadDoc = name => {
+  try {
+    const blob = new Blob(["KT AI — прототип\n\n" + name + "\n\nВ продукте здесь будет сформированный документ.\n"], { type: "text/plain;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = name.replace(/[^0-9A-Za-zА-Яа-яЁё]+/g, "_").slice(0, 60) + ".txt";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  } catch (e) {}
+  toast("Скачивание: " + name, "ok");
+};
+
+// Архетип экрана из реестра archetypes/registry.json (открытый набор).
+// Дефолт queue. Если архетип неизвестен/не реализован — подбираем безопасную форму
+// по наличию данных, а не ломаем экран: есть секции → custom, есть таблица → queue, иначе → custom.
+
+// document: документ с правками агента по фрагментам (принять/отклонить каждый флаг)
+function renderDocument() {
+  const doc = CFG.document || {}, sc = CFG.scenario || {};
+  $("pageTitle").textContent = sc.headline || doc.title || CFG.product.name;
+  $("pageSub").textContent = CFG.product.purpose || "";
+  if (!state.fragState) state.fragState = {};
+  const frs = Array.isArray(doc.fragments) ? doc.fragments : [];
+  const edits = frs.filter(f => f.op && f.op !== "keep").length, flags = frs.filter(f => f.flag).length;
+  let h = '<div style="max-width:820px;margin:0 auto;display:flex;flex-direction:column;gap:var(--kt-ai-stack-group)">';
+  h += bannerHtml();
+  h += '<div class="kt-ai-card" style="padding:var(--kt-ai-space-6)"><span class="kt-ai-label">Что сделал агент</span>' +
+    '<div style="margin-top:var(--kt-ai-space-3)">' + esc(doc.source ? "Собрал документ: " + doc.source + ". " : "") +
+    "Правок: " + edits + ", пометок риска: " + flags + ". Проверьте выделенные фрагменты.</div></div>";
+  if (!frs.length) return h + '<div class="kt-ai-empty"><span class="title">Документ пока пуст</span><span>Здесь появится текст с правками агента</span></div></div>';
+  h += '<div class="kt-ai-card" style="padding:var(--kt-ai-space-8)"><div class="kt-ai-h2" style="margin-bottom:var(--kt-ai-space-6)">' + esc(doc.title || "Документ") + "</div>";
+  h += frs.map((f, i) => {
+    const st = state.fragState[i];
+    let b = '<div style="margin-bottom:var(--kt-ai-space-6);border-left:2px solid ' + (f.flag ? "var(--kt-ai-status-warn-fg)" : "var(--kt-ai-border)") + ';padding-left:var(--kt-ai-space-5)">';
+    if (f.heading) b += '<div class="kt-ai-h3" style="margin-bottom:var(--kt-ai-space-2)">' + esc(f.heading) + "</div>";
+    if (f.op === "edit" && f.was) b += '<div class="kt-ai-diff" style="margin-bottom:var(--kt-ai-space-2)"><span class="line" data-op="del">' + esc(f.was) + '</span><span class="line" data-op="add">' + esc(f.text) + "</span></div>";
+    else if (f.op === "add") b += '<div class="kt-ai-diff" style="margin-bottom:var(--kt-ai-space-2)"><span class="line" data-op="add">' + esc(f.text) + "</span></div>";
+    else if (f.op === "del") b += '<div class="kt-ai-diff" style="margin-bottom:var(--kt-ai-space-2)"><span class="line" data-op="del">' + esc(f.text) + "</span></div>";
+    else b += "<div>" + esc(f.text) + "</div>";
+    if (f.flag) {
+      b += '<div class="kt-ai-banner" data-tone="warn" style="margin-top:var(--kt-ai-space-2)">' + esc(f.flag) + "</div>";
+      b += '<div style="display:flex;gap:var(--kt-ai-space-3);margin-top:var(--kt-ai-space-2)">' +
+        (st === "ok" ? '<span class="kt-ai-status-pill" data-status="ok">Принято</span>'
+          : st === "no" ? '<span class="kt-ai-status-pill" data-status="risk">Отклонено</span>'
+          : '<button class="kt-ai-btn" data-size="sm" data-variant="primary" onclick="S.fragOk(' + i + ')">Принять правку</button>' +
+            '<button class="kt-ai-btn" data-size="sm" onclick="S.fragNo(' + i + ')">Отклонить</button>') + "</div>";
+    }
+    return b + "</div>";
+  }).join("");
+  h += "</div>";
+  h += '<div style="display:flex;gap:var(--kt-ai-space-4)">' +
+    '<button class="kt-ai-btn" data-variant="primary" onclick="S.customAction()">' + esc(sc.control || "Подтвердить документ") + "</button>" +
+    (sc.reject ? '<button class="kt-ai-btn" onclick="S.customAction()">' + esc(sc.reject) + "</button>" : "") + "</div>";
+  return h + "</div>";
+}
+S.fragOk = i => { state.fragState[i] = "ok"; render(); toast("Правка принята", "ok"); };
+S.fragNo = i => { state.fragState[i] = "no"; render(); toast("Правка отклонена — фрагмент вернётся к исходному", "warn"); };
+
+// copilot: чат слева + живой артефакт-результат справа
+function renderCopilot() {
+  const ai = CFG.ai || {}, art = CFG.artifact || {}, sc = CFG.scenario || {};
+  $("pageTitle").textContent = sc.headline || CFG.product.name;
+  $("pageSub").textContent = CFG.product.purpose || "";
+  let chat = '<div class="kt-ai-chat" id="copChat" data-fill="true" role="log" aria-live="polite" aria-label="Диалог с агентом">' + msgHtml("assistant", ai.intro || "Здравствуйте! Опишите, что подготовить.") + "</div>";
+  let comp = "";
+  if (ai.suggestions && ai.suggestions.length)
+    comp += '<div class="kt-ai-suggestions" style="margin:var(--kt-ai-space-3) 0">' +
+      ai.suggestions.map(s => '<button class="kt-ai-suggestion" onclick="S.aiAsk(this.textContent,\'copChat\')">' + esc(s) + "</button>").join("") + "</div>";
+  comp += '<div class="kt-ai-prompt-bar"><textarea rows="1" id="copInput" aria-label="Сообщение агенту" placeholder="Попросить агента…" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();S.aiAsk(this.value,\'copChat\');this.value=\'\'}"></textarea>' +
+    '<button class="kt-ai-prompt-send" aria-label="Отправить" onclick="var i=document.getElementById(\'copInput\');S.aiAsk(i.value,\'copChat\');i.value=\'\'"><svg class="kt-icon"><use href="#send"></use></svg></button></div>';
+  const typeLabel = { document: "Документ", slides: "Слайды", report: "Отчёт", table: "Таблица", letter: "Письмо" }[art.type] || "Результат";
+  let right = '<div class="kt-ai-card" style="padding:var(--kt-ai-space-6);display:flex;flex-direction:column;gap:var(--kt-ai-space-4);min-width:0">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;gap:var(--kt-ai-space-3)">' +
+    '<span class="kt-ai-label">' + esc(typeLabel) + (art.version ? " · " + esc(art.version) : "") + "</span>" +
+    '<span class="kt-ai-status-pill" data-status="ok">Черновик готов</span></div>' +
+    '<div class="kt-ai-h3">' + esc(art.title || "") + "</div>" +
+    '<div style="white-space:pre-wrap;font-size:var(--kt-ai-text-sm);line-height:1.6;max-height:420px;overflow:auto;border:1px solid var(--kt-ai-border);border-radius:var(--kt-ai-radius-lg);padding:var(--kt-ai-space-5);background:var(--kt-ai-bg-soft)">' + esc(art.preview || "") + "</div>" +
+    '<div style="display:flex;gap:var(--kt-ai-space-3)">' +
+    (Array.isArray(art.actions) && art.actions.length ? art.actions : [sc.control || "Скачать"]).slice(0, 3).map((a, j) =>
+      '<button class="kt-ai-btn" data-size="sm"' + (j === 0 ? ' data-variant="primary"' : "") + ' onclick="S.customAction()">' + esc(a) + "</button>").join("") + "</div></div>";
+  let h = '<div class="kt-ai-cols" style="grid-template-columns:minmax(320px,1fr) minmax(320px,1.1fr);align-items:stretch">' +
+    '<div style="display:flex;flex-direction:column;min-height:420px">' + bannerHtml("var(--kt-ai-space-4)") +
+    chat + '<div style="margin-top:auto">' + comp + "</div></div>" + right + "</div>";
+  return h;
+}
+
+// wizard: пошаговая заявка с автозаполнением агентом
+function renderWizard() {
+  const wz = CFG.wizard || {}, sc = CFG.scenario || {};
+  $("pageTitle").textContent = sc.headline || CFG.product.name;
+  $("pageSub").textContent = CFG.product.purpose || "";
+  const steps = Array.isArray(wz.steps) ? wz.steps : [];
+  if (state.wizStep == null) state.wizStep = Math.min(Math.max((wz.current || 1) - 1, 0), steps.length - 1);
+  const cur = state.wizStep, stp = steps[cur] || { title: "", fields: [] };
+  // референс ElevenLabs (publishing flow): вертикальный степпер слева с описаниями, контент справа
+  let h = '<div class="kt-ai-cols" style="max-width:860px;margin:0 auto;grid-template-columns:230px minmax(0,1fr);gap:var(--kt-ai-space-9)">';
+  h += '<div style="display:flex;flex-direction:column;gap:var(--kt-ai-space-5)">' + steps.map((x, i) => {
+    const st = i < cur ? "done" : (i === cur ? "current" : "");
+    return '<div class="kt-ai-step-item"' + (st ? ' data-state="' + st + '"' : "") + ' style="align-items:flex-start"><span class="n" style="flex-shrink:0">' + (i < cur ? "✓" : i + 1) + "</span>" +
+      '<span><span style="display:block;font-size:var(--kt-ai-text-sm)">' + esc(x.title) + "</span>" +
+      (x.desc ? '<span style="display:block;margin-top:2px;font-size:var(--kt-ai-text-2xs);color:var(--kt-ai-fg-faint);line-height:1.4">' + esc(x.desc) + "</span>" : "") + "</span></div>";
+  }).join("") + "</div>";
+  h += '<div style="display:flex;flex-direction:column;gap:var(--kt-ai-stack-group)">';
+  h += bannerHtml();
+  h += '<div class="kt-ai-card" style="padding:var(--kt-ai-space-7);display:flex;flex-direction:column;gap:var(--kt-ai-space-5)">' +
+    '<div class="kt-ai-h3">' + esc(stp.title) + "</div>" +
+    (stp.fields || []).map(f =>
+      '<label class="kt-ai-field"><span class="cap" style="display:flex;gap:var(--kt-ai-space-2);align-items:center">' + esc(f.label) +
+      (f.prefill ? '<span class="kt-ai-chip" data-ai="true">заполнил агент</span>' : "") + "</span>" +
+      '<input class="kt-ai-input" value="' + esc(String(f.value == null ? "" : f.value)) + '">' +
+      (f.hint ? '<span class="hint">' + esc(f.hint) + "</span>" : "") + "</label>").join("") + "</div>";
+  h += '<div style="display:flex;justify-content:space-between;gap:var(--kt-ai-space-4)">' +
+    '<button class="kt-ai-btn"' + (cur === 0 ? " disabled" : "") + ' onclick="S.wizPrev()">‹ Назад</button>' +
+    (cur < steps.length - 1
+      ? '<button class="kt-ai-btn" data-variant="primary" onclick="S.wizNext()">Далее</button>'
+      : '<button class="kt-ai-btn" data-variant="primary" onclick="S.customAction()">' + esc(sc.control || "Отправить заявку") + "</button>") + "</div>";
+  h += "</div>";
+  return h + "</div>";
+}
+S.wizPrev = () => { if (state.wizStep > 0) { state.wizStep--; render(); } };
+S.wizNext = () => { state.wizStep++; render(); };
+
+
+// kanban: доска статусов – колонки из CFG.statuses, карточки = строки table.rows (клик открывает drawer)
+function renderKanban() {
+  const d = CFG.drawer || {};
+  const titleKey = d.titleKey || (cols[0] || {}).key, subKey = (cols[1] || {}).key;
+  const colKeys = Object.keys(statuses);
+  let h = renderHead();
+  h += '<div style="display:flex;gap:var(--kt-ai-space-4);align-items:flex-start;overflow-x:auto;padding-bottom:var(--kt-ai-space-4);margin-top:var(--kt-ai-space-6)">';
+  h += colKeys.map(k => {
+    const st = statuses[k] || { label: k, tone: "info" };
+    const cards = rows.filter(r => statusCol && String(r[statusCol]) === k);
+    return '<div style="flex:1 1 0;min-width:230px;background:var(--kt-ai-bg-soft);border:1px solid var(--kt-ai-border);border-radius:var(--kt-ai-radius-xl);padding:var(--kt-ai-space-4)">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--kt-ai-space-4)">' + statusTag(k) +
+      '<span class="kt-ai-meta">' + cards.length + "</span></div>" +
+      (cards.length ? cards.map(r => {
+        const flags = r._flags || [];
+        return '<div class="kt-ai-card kt-ai-hover-lift" role="button" tabindex="0" onclick="S.open(' + r._i + ')" onkeydown="if(event.key===\'Enter\'){S.open(' + r._i + ')}" style="cursor:pointer;padding:var(--kt-ai-space-4);margin-bottom:var(--kt-ai-space-3)">' +
+          '<div style="font-size:var(--kt-ai-text-sm);font-weight:500">' + esc(r[titleKey]) + "</div>" +
+          (subKey && r[subKey] != null ? '<div class="kt-ai-meta" style="margin-top:2px">' + esc(r[subKey]) + "</div>" : "") +
+          (flags.length ? '<div class="kt-ai-meta" style="margin-top:var(--kt-ai-space-3);display:flex;align-items:baseline;gap:5px;color:var(--kt-ai-status-warn-fg)">' +
+            '<svg class="kt-icon kt-icon-sm" viewBox="0 0 24 24" style="flex-shrink:0;align-self:center"><path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>' +
+            '<span class="kt-ai-truncate" style="min-width:0">' + esc(flags[0]) + "</span>" + (flags.length > 1 ? '<span style="flex-shrink:0">+' + (flags.length - 1) + "</span>" : "") + "</div>" : "") +
+          "</div>";
+      }).join("") : '<div class="kt-ai-meta" style="padding:var(--kt-ai-space-4);text-align:center">Пусто</div>') + "</div>";
+  }).join("");
+  return h + "</div>";
+}
+
+// inbox: список + постоянная панель чтения (обращения, письма) – выбранная запись читается справа
+function renderInbox() {
+  const sc = CFG.scenario || {}, d = CFG.drawer || {}, ib = CFG.inbox || {};
+  const titleKey = ib.titleKey || d.titleKey || (cols[0] || {}).key;
+  if (state.inboxIdx == null || !rows[state.inboxIdx]) state.inboxIdx = (attentionFirst()[0] || rows[0] || {})._i || 0;
+  const cur = rows[state.inboxIdx];
+  let h = renderHead();
+  if (!cur) return h + '<div class="kt-ai-empty"><span class="title">Пока нет записей</span></div>';
+  h += '<div class="kt-ai-cols" style="grid-template-columns:300px minmax(0,1fr);margin-top:var(--kt-ai-space-6)">';
+  h += '<div style="border:1px solid var(--kt-ai-border);border-radius:var(--kt-ai-radius-xl);overflow:hidden">' +
+    rows.map(r => '<div class="kt-ai-row-hover" role="button" tabindex="0" onclick="S.inboxSel(' + r._i + ')" onkeydown="if(event.key===\'Enter\'){S.inboxSel(' + r._i + ')}" style="cursor:pointer;border-radius:0;padding:var(--kt-ai-space-4) var(--kt-ai-space-5);border-bottom:1px solid var(--kt-ai-border)' +
+      (r._i === cur._i ? ";background:var(--kt-ai-bg-active)" : "") + '">' +
+      '<div style="display:flex;justify-content:space-between;gap:var(--kt-ai-space-3);align-items:baseline">' +
+      '<span class="kt-ai-truncate" style="font-size:var(--kt-ai-text-sm);font-weight:500">' + esc(r[titleKey]) + "</span>" +
+      (ib.timeKey && r[ib.timeKey] != null ? '<span class="kt-ai-meta" style="flex-shrink:0;font-size:var(--kt-ai-text-2xs)">' + esc(r[ib.timeKey]) + "</span>" : "") + "</div>" +
+      '<div style="display:flex;justify-content:space-between;gap:var(--kt-ai-space-3);margin-top:2px;align-items:center">' +
+      (ib.subKey && r[ib.subKey] != null ? '<span class="kt-ai-meta kt-ai-truncate">' + esc(r[ib.subKey]) + "</span>" : "<span></span>") +
+      (statusCol ? statusTag(r[statusCol]) : "") + "</div></div>").join("") + "</div>";
+  const flags = cur._flags || [];
+  h += '<div class="kt-ai-card" style="padding:var(--kt-ai-space-7)">' +
+    '<div style="display:flex;justify-content:space-between;gap:var(--kt-ai-space-4);align-items:flex-start"><div class="kt-ai-h2">' + esc(cur[titleKey]) + "</div>" + (statusCol ? statusTag(cur[statusCol]) : "") + "</div>" +
+    '<div style="margin:var(--kt-ai-space-4) 0 var(--kt-ai-space-5)">' +
+    (d.fields && d.fields.length ? d.fields.map(f => '<div class="kt-ai-prop"><span class="k">' + esc(f.label) + '</span><span class="v">' + esc(fmtVal(cur[f.key]) ?? "–") + "</span></div>").join("") : "") + "</div>" +
+    (ib.bodyKey && cur[ib.bodyKey] != null ? '<div style="white-space:pre-wrap;font-size:var(--kt-ai-text-sm);line-height:1.65;border:1px solid var(--kt-ai-border);border-radius:var(--kt-ai-radius-lg);padding:var(--kt-ai-space-5);background:var(--kt-ai-bg-soft)">' + esc(cur[ib.bodyKey]) + "</div>" : "") +
+    (flags.length ? '<div class="kt-ai-label" style="margin-top:var(--kt-ai-space-5)">' + esc(d.flagsLabel || "Разбор агента") + "</div>" +
+      flags.map(f => '<div class="kt-ai-banner" data-tone="info" style="margin-top:var(--kt-ai-space-2)">' + esc(f) + "</div>").join("") : "") +
+    '<div class="drawer-actions"><button class="kt-ai-btn" data-variant="primary" onclick="state.openRow=' + cur._i + ';S.askApprove()">' + esc(sc.control || "Подтвердить") + "</button>" +
+    (sc.reject ? '<button class="kt-ai-btn" onclick="state.openRow=' + cur._i + ';S.reject()">' + esc(sc.reject) + "</button>" : "") + "</div></div>";
+  return h + "</div>";
+}
+S.inboxSel = i => { state.inboxIdx = i; render(); };
+
+// analytics: аналитический разбор – сводка агента, чарты (bar/line/donut на чистом SVG/CSS), выводы с тонами
+
+// переиспользуемый line-чарт (analytics и dashboard): полилиния + область + сетка + подписи оси
+function lineChartSvg(pts, o) {
+  const W = o.W || 300, H = o.H || 120, color = o.color || "var(--kt-ai-chart-blue)";
+  const n = pts.length, x0 = 8, y0 = 12, w = W - 16, hh = H - 36;
+  const vals = pts.map(p => +p.value || 0);
+  const max = Math.max(1, ...vals), min = Math.min(...vals), span = (max - min) || 1;
+  const px = i => x0 + (n > 1 ? i * (w / (n - 1)) : w / 2), py = v => y0 + hh - ((v - min) / span) * hh;
+  const line = pts.map((p, i) => (i ? "L" : "M") + px(i).toFixed(1) + " " + py(+p.value || 0).toFixed(1)).join(" ");
+  const area = line + " L" + px(n - 1).toFixed(1) + " " + (y0 + hh) + " L" + px(0).toFixed(1) + " " + (y0 + hh) + " Z";
+  return '<svg viewBox="0 0 ' + W + " " + H + '" style="width:100%;height:auto;display:block" role="img" aria-label="' + esc(o.title || "") + '">' +
+    [0, .5, 1].map(f => '<line x1="' + x0 + '" y1="' + (y0 + hh * f).toFixed(1) + '" x2="' + (x0 + w) + '" y2="' + (y0 + hh * f).toFixed(1) + '" stroke="var(--kt-ai-border)" stroke-width="1" stroke-dasharray="2 3"/>').join("") +
+    '<path d="' + area + '" fill="' + color + '" opacity="0.10"/>' +
+    '<path d="' + line + '" fill="none" stroke="' + color + '" stroke-width="2" stroke-linejoin="round"/>' +
+    pts.map((p, i) => '<circle cx="' + px(i).toFixed(1) + '" cy="' + py(+p.value || 0).toFixed(1) + '" r="' + (W > 400 ? 3 : 2.6) + '" fill="' + color + '"' + tipAttr(p) + "></circle>").join("") +
+    pts.map((p, i) => { const step = Math.max(1, Math.ceil(n / (W > 400 ? 12 : 7))); if (i % step !== 0 && i !== n - 1) return ""; const anchor = i === 0 ? "start" : i === n - 1 ? "end" : "middle"; return '<text x="' + px(i).toFixed(1) + '" y="' + (H - 6) + '" text-anchor="' + anchor + '" font-size="' + (W > 400 ? 11 : 9) + '" fill="var(--kt-ai-fg-faint)">' + esc(p.label) + "</text>"; }).join("") +
+    '<text x="' + (W > 400 ? x0 : x0 + w) + '" y="' + (y0 - 3) + '"' + (W > 400 ? "" : ' text-anchor="end"') + ' font-size="' + (W > 400 ? 11 : 9) + '" fill="var(--kt-ai-fg-faint)">' + esc(String(max)) + (o.unit ? " " + esc(o.unit) : "") + "</text></svg>";
+}
+const ANALYTICS_PALETTE = ["--kt-ai-chart-blue", "--kt-ai-chart-green", "--kt-ai-chart-orange", "--kt-ai-chart-salmon", "--kt-ai-chart-pink"];
+function tipAttr(b) {
+  // Подсказка марки. hint приходит от продукта ГОТОВЫМ — ничего не считаем и не
+  // форматируем: сервер и браузер округляют по-разному, и разошедшийся формат
+  // это разошедшееся число. Без hint показываем то же, что показывал title.
+  var v = b && b.hint ? JSON.stringify(b.hint) : ((b && b.label ? b.label + ": " : "") + (b ? b.value : ""));
+  return ' data-kt-tip="' + esc(v) + '" tabindex="0"';
+}
+
+function analyticsChartCard(ch, idx) {
+  const pts = Array.isArray(ch.points) ? ch.points.filter(p => p && p.label != null) : [];
+  const vals = pts.map(p => +p.value || 0);
+  const max = Math.max(1, ...vals);
+  const color = "var(" + (ANALYTICS_PALETTE[idx % ANALYTICS_PALETTE.length]) + ")";
+  const toneColor = t => toneFg(t, color);
+  let body = "";
+  if (ch.type === "line") {
+    body = lineChartSvg(pts, { color: color, unit: ch.unit, title: ch.title });
+  } else if (ch.type === "donut") {
+    const total = vals.reduce((a, b) => a + b, 0) || 1;
+    let off = 25, segs = "";
+    pts.forEach((p, i) => {
+      const share = (+p.value || 0) / total * 100;
+      const c = p.tone ? toneColor(p.tone) : "var(" + ANALYTICS_PALETTE[i % ANALYTICS_PALETTE.length] + ")";
+      segs += '<circle r="15.9155" cx="21" cy="21" fill="none" stroke="' + c + '" stroke-width="5.5" stroke-dasharray="' + share.toFixed(2) + " " + (100 - share).toFixed(2) + '" stroke-dashoffset="' + off.toFixed(2) + '"' + tipAttr(p) + "></circle>";
+      off -= share;
+    });
+    body = '<div style="display:flex;gap:var(--kt-ai-space-6);align-items:center">' +
+      '<svg viewBox="0 0 42 42" style="width:118px;height:118px;flex-shrink:0" role="img" aria-label="' + esc(ch.title) + '">' + segs +
+      '<text x="21" y="21.5" text-anchor="middle" dominant-baseline="middle" font-size="8" font-weight="600" fill="var(--kt-ai-fg)">' + esc(ch.total != null ? String(ch.total) : String(total)) + "</text></svg>" +
+      '<div style="flex:1;min-width:0">' + pts.map((p, i) => {
+        const c = p.tone ? toneColor(p.tone) : "var(" + ANALYTICS_PALETTE[i % ANALYTICS_PALETTE.length] + ")";
+        return '<div style="display:flex;align-items:center;gap:var(--kt-ai-space-3);padding:3px 0;font-size:var(--kt-ai-text-xs)">' +
+          '<span style="width:9px;height:9px;border-radius:3px;background:' + c + ';flex-shrink:0"></span>' +
+          '<span style="flex:1;min-width:0;line-height:1.3">' + esc(p.label) + "</span>" +
+          '<span class="kt-ai-num" style="font-weight:600">' + esc(p.value) + "</span>" +
+          '<span class="kt-ai-meta" style="width:38px;text-align:right">' + Math.round((+p.value || 0) / total * 100) + "%</span></div>";
+      }).join("") + "</div></div>";
+  } else {  // bar (горизонтальные полосы: подпись | полоса | значение – читаемее для категорий)
+    body = pts.map(p => {
+      const c = p.tone ? toneColor(p.tone) : color;
+      return '<div class="kt-ai-row-hover" style="display:grid;grid-template-columns:minmax(90px,32%) 1fr 56px;gap:var(--kt-ai-space-3);align-items:center;padding:3px 0;font-size:var(--kt-ai-text-xs)">' +
+        '<span style="line-height:1.3">' + esc(p.label) + "</span>" +
+        '<span style="height:8px;border-radius:4px;background:var(--kt-ai-bg-soft);overflow:hidden;display:block"><span style="display:block;height:100%;border-radius:4px;width:' + Math.round((+p.value || 0) / max * 100) + "%;background:" + c + '"></span></span>' +
+        '<span class="kt-ai-num" style="text-align:right;font-weight:600">' + esc(p.value) + (ch.unit ? ' <span class="kt-ai-meta" style="font-weight:400">' + esc(ch.unit) + "</span>" : "") + "</span></div>";
+    }).join("");
+  }
+  return '<section class="kt-ai-chart-card" style="margin-bottom:0"><div class="cc-head"><div><div class="cc-title">' + esc(ch.title || "") + "</div>" +
+    (ch.total != null && ch.type !== "donut" ? '<div class="cc-total"><span class="num">' + esc(ch.total) + "</span>" + (ch.unit ? '<span class="unit">' + esc(ch.unit) + "</span>" : "") + "</div>" : "") + "</div></div>" +
+    body + (ch.note ? '<div class="kt-ai-meta" style="margin-top:var(--kt-ai-space-4)">' + esc(ch.note) + "</div>" : "") + "</section>";
+}
+function renderAnalytics() {
+  const an = CFG.analytics || {}, sc = CFG.scenario || {};
+  const charts = Array.isArray(an.charts) ? an.charts : [];
+  const finds = Array.isArray(an.findings) ? an.findings : [];
+  let h = renderHead();
+  if (an.summary) h += '<div class="kt-ai-card" style="padding:var(--kt-ai-space-6);margin-top:var(--kt-ai-space-6)"><div style="display:flex;justify-content:space-between;gap:var(--kt-ai-space-4);align-items:baseline"><span class="kt-ai-label">Что увидел агент</span>' +
+    (an.period ? '<span class="kt-ai-meta">' + esc(an.period) + "</span>" : "") + "</div>" +
+    '<div style="margin-top:var(--kt-ai-space-3);line-height:1.6">' + esc(an.summary) + "</div></div>";
+  if (charts.length) h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:var(--kt-ai-space-6);margin-top:var(--kt-ai-space-6)">' +
+    charts.map((ch, i) => analyticsChartCard(ch, i)).join("") + "</div>";
+  if (finds.length) {
+    h += '<div class="kt-ai-h3" style="margin:var(--kt-ai-space-8) 0 var(--kt-ai-space-4)">Выводы агента</div>';
+    h += finds.map(f => '<div class="kt-ai-banner" data-tone="' + esc(f.tone || "info") + '" style="margin-bottom:var(--kt-ai-space-3);display:flex;gap:var(--kt-ai-space-4);align-items:baseline">' +
+      '<span style="flex:1;min-width:0"><strong>' + esc(f.title) + "</strong>" + (f.detail ? " — " + esc(f.detail) : "") + "</span>" +
+      (f.value != null ? '<span class="kt-ai-num" style="font-weight:600;flex-shrink:0">' + esc(f.value) + "</span>" : "") + "</div>").join("");
+  }
+  if (sc.control) h += '<div style="margin-top:var(--kt-ai-space-6)"><button class="kt-ai-btn" data-variant="primary" onclick="S.customAction()">' + esc(sc.control) + "</button></div>";
+  return h;
+}
+
+// calendar: расписание по датам – события сгруппированы по дням (окна работ, дежурства, сроки)
+const CAL_MONTHS = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
+const CAL_DAYS = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"];
+function renderCalendar() {
+  const cal = CFG.calendar || {};
+  const evs = (Array.isArray(cal.events) ? cal.events : []).filter(e => e && e.date && e.title).slice().sort((a, b) => String(a.date + (a.time || "")).localeCompare(String(b.date + (b.time || ""))));
+  const byDay = {};
+  evs.forEach(e => { (byDay[e.date] = byDay[e.date] || []).push(e); });
+  let h = renderHead();
+  h += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin:var(--kt-ai-space-6) 0 var(--kt-ai-space-4)"><div class="kt-ai-h3">' + esc(cal.title || "Расписание") + "</div>" +
+    (cal.range ? '<span class="kt-ai-meta">' + esc(cal.range) + "</span>" : "") + "</div>";
+  h += Object.keys(byDay).sort().map(dk => {
+    const m = dk.match(/(\d{4})-(\d{2})-(\d{2})/);
+    const dt = m ? new Date(+m[1], +m[2] - 1, +m[3]) : null;
+    const head = dt ? (+m[3]) + " " + CAL_MONTHS[dt.getMonth()] + ", " + CAL_DAYS[dt.getDay()] : dk;
+    return '<div style="margin-bottom:var(--kt-ai-space-5)"><div class="kt-ai-label" style="margin-bottom:var(--kt-ai-space-3)">' + esc(head) + "</div>" +
+      byDay[dk].map(e => {
+        const tone = e.tone || "info";
+        const edge = toneFg(tone, "var(--kt-ai-border-strong)");
+        return '<div class="kt-ai-card kt-ai-hover-lift" style="padding:var(--kt-ai-space-4) var(--kt-ai-space-5);margin-bottom:var(--kt-ai-space-3);border-left:3px solid ' + edge + ';display:flex;gap:var(--kt-ai-space-5);align-items:baseline">' +
+          '<span class="kt-ai-num" style="flex-shrink:0;width:88px;font-size:var(--kt-ai-text-xs)">' + esc(e.time || "весь день") + "</span>" +
+          '<span style="flex:1;min-width:0"><span style="font-size:var(--kt-ai-text-sm);font-weight:500">' + esc(e.title) + "</span>" +
+          (e.note ? '<span class="kt-ai-meta" style="display:block;margin-top:2px">' + esc(e.note) + "</span>" : "") + "</span>" +
+          (e.badge ? '<span class="kt-ai-status-pill" data-status="' + esc(tone) + '">' + esc(e.badge) + "</span>" : "") + "</div>";
+      }).join("") + "</div>";
+  }).join("");
+  if (!evs.length) h += '<div class="kt-ai-empty"><span class="title">Событий пока нет</span></div>';
+  return h;
+}
+
+// map: схема-карта участка – точки (0-100 по обеим осям) со статусами, линии-связи; НЕ геокарта с тайлами
+function renderMap() {
+  const mp = CFG.map || {};
+  const pts = (Array.isArray(mp.points) ? mp.points : []).filter(p => p && p.label != null);
+  const toneOf = p => (p.status && statuses[p.status] ? statuses[p.status].tone : p.tone) || "info";
+  const fillOf = t => toneFg(t, "var(--kt-ai-fg-muted)");
+  const px = v => 40 + (Math.max(0, Math.min(100, +v || 0)) / 100) * 920;   // viewBox 1000x600: подписи рендерятся ~13px
+  const py = v => 60 + (Math.max(0, Math.min(100, +v || 0)) / 100) * 480;
+  let svg = "";
+  (Array.isArray(mp.lines) ? mp.lines : []).forEach(l => {
+    const a = pts[l[0]], b = pts[l[1]];
+    if (a && b) svg += '<line x1="' + px(a.x).toFixed(1) + '" y1="' + py(a.y).toFixed(1) + '" x2="' + px(b.x).toFixed(1) + '" y2="' + py(b.y).toFixed(1) + '" stroke="var(--kt-ai-border-strong)" stroke-width="4"/>';
+  });
+  pts.forEach(p => {
+    const t = toneOf(p);
+    const tx = Math.max(110, Math.min(890, px(p.x)));   // подпись не вылезает за край схемы
+    svg += '<circle data-map-pt="true" cx="' + px(p.x).toFixed(1) + '" cy="' + py(p.y).toFixed(1) + '" r="9" fill="' + fillOf(t) + '"' + (t === "risk" ? ' stroke="var(--kt-ai-status-risk-fg)" stroke-opacity="0.35" stroke-width="8"' : "") + "><title>" + esc(p.label + (p.note ? " — " + p.note : "")) + "</title></circle>" +
+      '<text x="' + tx.toFixed(1) + '" y="' + (py(p.y) - 18).toFixed(1) + '" text-anchor="middle" font-size="12" fill="var(--kt-ai-fg-muted)">' + esc(p.label) + "</text>";
+  });
+  const att = pts.filter(p => /warn|risk/.test(toneOf(p)));
+  let h = renderHead();
+  h += '<div class="kt-ai-card" style="padding:var(--kt-ai-space-6);margin-top:var(--kt-ai-space-6)">' +
+    (mp.title ? '<div class="kt-ai-label" style="margin-bottom:var(--kt-ai-space-4)">' + esc(mp.title) + "</div>" : "") +
+    '<svg viewBox="0 0 1000 600" style="width:100%;height:auto;display:block;background-image:radial-gradient(var(--kt-ai-border) 0.5px,transparent 0.5px);background-size:8px 8px;border-radius:var(--kt-ai-radius-lg)" role="img" aria-label="' + esc(mp.title || "Схема участка") + '">' + svg + "</svg>" +
+    '<div style="display:flex;gap:var(--kt-ai-space-5);margin-top:var(--kt-ai-space-4);flex-wrap:wrap">' +
+    [["ok", "в норме"], ["warn", "внимание"], ["risk", "проблема"]].map(l => '<span class="kt-ai-meta" style="display:flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:50%;background:' + fillOf(l[0]) + '"></span>' + l[1] + "</span>").join("") + "</div></div>";
+  if (att.length) {
+    h += '<div class="kt-ai-h3" style="margin:var(--kt-ai-space-7) 0 var(--kt-ai-space-4)">Требует внимания</div>';
+    h += att.map(p => '<div class="kt-ai-banner" data-tone="' + (toneOf(p) === "risk" ? "risk" : "warn") + '" style="margin-bottom:var(--kt-ai-space-3)"><strong>' + esc(p.label) + "</strong>" + (p.note ? " — " + esc(p.note) : "") + "</div>").join("");
+  }
+  return h;
+}
+
+// timeline: хронология дела/инцидента – вертикальная лента событий с акторами и тонами
+function renderTimeline() {
+  const tl = CFG.timeline || {};
+  const evs = (Array.isArray(tl.events) ? tl.events : []).filter(e => e && e.title);
+  const dotOf = t => toneFg(t, "var(--kt-ai-fg-faint)");
+  let h = renderHead();
+  if (tl.title) h += '<div class="kt-ai-h3" style="margin:var(--kt-ai-space-6) 0 var(--kt-ai-space-4)">' + esc(tl.title) + "</div>";
+  h += '<div style="max-width:720px;margin-top:var(--kt-ai-space-5)">' + evs.map((e, i) => {
+    const last = i === evs.length - 1;
+    return '<div style="display:grid;grid-template-columns:96px 20px minmax(0,1fr);gap:var(--kt-ai-space-3)">' +
+      '<span class="kt-ai-num" style="font-size:var(--kt-ai-text-xs);color:var(--kt-ai-fg-muted);text-align:right;padding-top:2px">' + esc(e.time || "") + "</span>" +
+      '<span style="display:flex;flex-direction:column;align-items:center"><span style="width:10px;height:10px;border-radius:50%;background:' + dotOf(e.tone) + ";margin-top:4px;flex-shrink:0" +
+      (e.current ? ";box-shadow:0 0 0 3px var(--kt-ai-bg-active)" : "") + '"></span>' +
+      (last ? "" : '<span style="flex:1;width:1px;background:var(--kt-ai-border);margin-top:3px"></span>') + "</span>" +
+      '<div style="padding-bottom:' + (last ? "0" : "var(--kt-ai-space-6)") + '">' +
+      '<div style="display:flex;gap:var(--kt-ai-space-3);align-items:baseline;flex-wrap:wrap"><span style="font-size:var(--kt-ai-text-sm);font-weight:' + (e.current ? "600" : "500") + '">' + esc(e.title) + "</span>" +
+      (e.actor ? '<span class="kt-ai-chip"' + (/агент/i.test(e.actor) ? ' data-ai="true"' : "") + ">" + esc(e.actor) + "</span>" : "") + "</div>" +
+      (e.text ? '<div class="kt-ai-meta" style="margin-top:3px;line-height:1.55">' + esc(e.text) + "</div>" : "") + "</div></div>";
+  }).join("") + "</div>";
+  if (!evs.length) h += '<div class="kt-ai-empty"><span class="title">Событий пока нет</span></div>';
+  return h;
+}
+
+function mainByLayout() {
+  const lay = (CFG.archetype || CFG.layout || "queue");
+  if (lay === "queue") return renderMain();
+  if (lay === "cockpit") return renderCockpit();
+  if (lay === "dashboard") return renderDashboard();
+  if (lay === "compare") return renderCompare();
+  if (lay === "conversational") return renderConversational();
+  if (lay === "custom") return renderCustom();
+  if (lay === "document") return renderDocument();
+  if (lay === "copilot") return renderCopilot();
+  if (lay === "wizard") return renderWizard();
+  if (lay === "kanban") return renderKanban();
+  if (lay === "inbox") return renderInbox();
+  if (lay === "analytics") return renderAnalytics();
+  if (lay === "calendar") return renderCalendar();
+  if (lay === "map") return renderMap();
+  if (lay === "timeline") return renderTimeline();
+  // неизвестный / planned архетип → не падаем, выбираем форму под данные
+  if (Array.isArray(CFG.sections) && CFG.sections.length) return renderCustom();
+  if (CFG.table && CFG.table.rows && CFG.table.rows.length) return renderMain();
+  return renderCustom();
+}
+function attentionFirst() {
+  const att = rows.filter(r => statusCol && statuses[r[statusCol]] && /warn|risk/.test(statuses[r[statusCol]].tone || ""));
+  return att.length ? att : rows;
+}
+function plainTable(list) {
+  if (!list.length) return '<div class="kt-ai-empty"><span class="title">Пока нет записей</span><span>Здесь появятся объекты, как только агент их обработает</span></div>';
+  return '<div class="kt-ai-table-wrap"><table class="kt-ai-table"><thead><tr>' +
+    cols.map(c => "<th" + (c.type === "num" ? ' style="text-align:right"' : "") + ">" + esc(c.label) + "</th>").join("") +
+    '</tr></thead><tbody>' +
+    list.map(r => '<tr onclick="S.open(' + r._i + ')" style="cursor:pointer">' +
+      cols.map(c => "<td" + (c.type === "num" ? ' class="num"' : "") + ">" + cellHtml(r, c) + "</td>").join("") + "</tr>").join("") +
+    '</tbody></table></div>';
+}
+const TONE_FG = { ok: "var(--kt-ai-status-ok-fg)", warn: "var(--kt-ai-status-warn-fg)", risk: "var(--kt-ai-status-risk-fg)" };
+function toneFg(t, dflt) { return TONE_FG[t] || dflt; }
+function bannerHtml(mb) {
+  if (!(CFG.banner && CFG.banner.text)) return "";
+  return '<div class="kt-ai-banner" data-tone="' + esc(CFG.banner.tone || "info") + '"' + (mb ? ' style="margin-bottom:' + mb + '"' : "") + '>' + esc(CFG.banner.text) + "</div>";
+}
+function fmtVal(v) {
+  // ISO-дата не должна протекать в интерфейс: 2026-07-21 -> 21.07.2026
+  const m = String(v == null ? "" : v).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? m[3] + "." + m[2] + "." + m[1] : v;
+}
+// hint — «из чего считано» (40 знаков: знаменатель, доля, период).
+// note — «чем это число НЕ является»: оговорка о поле-источнике. Потолка у неё
+// нет и она не прячется под клик: полосу плиток видят все, и оговорка обязана
+// стоять там же, где число, иначе её читают не все (см. .kt-ai-kpi .note).
+function kpiHtml(k, extra) {
+  const long = String(k.value == null ? "" : k.value).length > 12;
+  return '<div class="kt-ai-kpi"' + (extra || "") + '><span class="value"' + (long ? ' data-long="true"' : "") + '>' + esc(k.value) + '</span><span class="label">' + esc(k.label) + "</span>" + (k.hint ? '<span class="hint">' + esc(k.hint) + "</span>" : "") + (k.note ? '<span class="note">' + esc(k.note) + "</span>" : "") + "</div>";
+}
+
+// Вывод раздела: последний блок экрана, после таблицы. Заголовок необязателен,
+// абзацы разделяются пустой строкой — вывод бывает длиннее одной мысли.
+function conclusionHtml() {
+  const c = CFG.conclusion;
+  if (!c || !c.text) return "";
+  const абзацы = String(c.text).split(/\n{2,}/).map(t => t.trim()).filter(Boolean);
+  return '<section class="kt-ai-conclusion">' +
+    (c.title ? '<span class="title">' + esc(c.title) + "</span>" : "") +
+    абзацы.map(t => '<span class="text">' + esc(t) + "</span>").join("") + "</section>";
+}
+function renderHead() {
+  const sc = CFG.scenario || {};
+  $("pageTitle").textContent = sc.headline || CFG.product.name;
+  $("pageSub").textContent = CFG.product.purpose || "";
+  let h = "";
+  h += bannerHtml("var(--kt-ai-stack-group)");
+  if (CFG.kpis && CFG.kpis.length) h += '<div class="kt-ai-kpi-strip" data-cards="true">' + CFG.kpis.map(k => kpiHtml(k)).join("") + "</div>";
+  return h;
+}
+// dashboard: метрики наверху + список «требует внимания» (управление состоянием процесса)
+function renderDashboard() {
+  const att = rows.filter(r => statusCol && statuses[r[statusCol]] && /warn|risk/.test(statuses[r[statusCol]].tone || ""));
+  const db = CFG.dashboard || {};
+  const series = Array.isArray(db.series) ? db.series.filter(s => s && Array.isArray(s.points) && s.points.length >= 2) : [];
+  if (!series.length) {
+    // простой дашборд (без блока dashboard): KPI + список внимания
+    return renderHead() +
+      '<div class="kt-ai-h3" style="margin:var(--kt-ai-space-8) 0 var(--kt-ai-space-4)">' + (att.length ? "Требует внимания" : "Записи") + "</div>" +
+      plainTable(att.length ? att : rows);
+  }
+  // референс ElevenLabs dashboard: KPI-карточки = табы, выбранная метрика управляет большим чартом
+  const sc = CFG.scenario || {};
+  $("pageTitle").textContent = sc.headline || CFG.product.name;
+  $("pageSub").textContent = CFG.product.purpose || "";
+  let h = "";
+  if (CFG.banner && CFG.banner.text) {
+    const b = CFG.banner;
+    const act = b.action ? '<button class="kt-ai-btn" data-size="sm" onclick="' + (b.actionNav != null ? "S.nav(" + b.actionNav + ")" : "S.bannerAction()") + '">' + esc(b.action) + " →</button>" : "";
+    h += '<div class="kt-ai-banner" data-tone="' + esc(b.tone || "info") + '" style="margin-bottom:var(--kt-ai-stack-group);display:flex;align-items:center;gap:var(--kt-ai-space-5)"><span style="flex:1;min-width:0">' + esc(b.text) + "</span>" + act + "</div>";
+  }
+  // KPI-табы: series[i].kpi — индекс метрики в CFG.kpis (по умолчанию i)
+  const kpis = Array.isArray(CFG.kpis) ? CFG.kpis : [];
+  const kpiToSeries = {};
+  series.forEach((s, si) => { const ki = s.kpi != null ? +s.kpi : si; if (kpiToSeries[ki] == null && kpis[ki]) kpiToSeries[ki] = si; });
+  if (state.dashKpi == null || kpiToSeries[state.dashKpi] == null) state.dashKpi = +Object.keys(kpiToSeries)[0];
+  h += '<div class="kt-ai-kpi-strip" data-cards="true">' + kpis.map((k, ki) => {
+    const clickable = kpiToSeries[ki] != null, active = clickable && ki === state.dashKpi;
+    return kpiHtml(k, clickable ? ' data-tab="true" data-active="' + active + '" role="tab" aria-selected="' + active + '" tabindex="0" onclick="S.dashKpi(' + ki + ')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();S.dashKpi(' + ki + ')}"' : "");
+  }).join("") + "</div>";
+  const cur = series[kpiToSeries[state.dashKpi]];
+  // без дубля цифры: значение уже на выбранной KPI-карточке (референс ElevenLabs)
+  h += '<section class="kt-ai-chart-card"><div class="cc-head"><div><div class="cc-title">' + esc(cur.title || (kpis[state.dashKpi] || {}).label || "") + "</div></div>" +
+    (db.range ? '<span class="kt-ai-meta">' + esc(db.range) + "</span>" : "") + "</div>" +
+    lineChartSvg(cur.points, { W: 1160, H: 290, color: "var(--kt-ai-chart-blue)", unit: cur.unit, title: cur.title }) +
+    (cur.note ? '<div class="kt-ai-meta" style="margin-top:var(--kt-ai-space-4)">' + esc(cur.note) + "</div>" : "") + "</section>";
+  // нижняя сетка разборов: cards (мини-карточки статистики) / share (доли с процент-барами) / top (топ-N с баром за подписью)
+  const brs = Array.isArray(db.breakdowns) ? db.breakdowns : [];
+  if (brs.length) h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:var(--kt-ai-space-6)">' + brs.map(br => {
+    const items = Array.isArray(br.items) ? br.items : [];
+    let body = "";
+    if (br.type === "cards") {
+      body = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:var(--kt-ai-space-4)">' + items.map(it =>
+        '<div style="border:1px solid var(--kt-ai-border);border-radius:var(--kt-ai-radius-lg);padding:var(--kt-ai-space-4)">' +
+        '<div style="font-size:var(--kt-ai-text-sm);font-weight:500;margin-bottom:var(--kt-ai-space-3)">' + esc(it.title) + "</div>" +
+        (Array.isArray(it.stats) ? it.stats : []).map(st => '<div style="display:flex;justify-content:space-between;gap:var(--kt-ai-space-3);padding:2px 0;font-size:var(--kt-ai-text-xs)"><span class="kt-ai-meta">' + esc(st.label) + '</span><span class="kt-ai-num">' + esc(st.value) + "</span></div>").join("") + "</div>").join("") + "</div>";
+    } else if (br.type === "share") {
+      const total = items.reduce((a, b) => a + (+b.value || 0), 0) || 1;
+      body = items.map(it => {
+        const pct = Math.round((+it.value || 0) / total * 100);
+        return '<div class="kt-ai-row-hover" style="display:grid;grid-template-columns:minmax(90px,38%) 1fr 44px;gap:var(--kt-ai-space-3);align-items:center;padding:4px 0;font-size:var(--kt-ai-text-xs)">' +
+          '<span style="line-height:1.3">' + esc(it.label) + "</span>" +
+          '<span style="height:7px;border-radius:4px;background:var(--kt-ai-bg-soft);overflow:hidden;display:block"><span style="display:block;height:100%;border-radius:4px;width:' + pct + '%;background:var(--kt-ai-primary)"></span></span>' +
+          '<span class="kt-ai-num" style="text-align:right">' + pct + "%</span></div>";
+      }).join("");
+    } else {  // top: бар-трек за подписью, значение справа (референс «Top called paths»)
+      const max = Math.max(1, ...items.map(it => +it.value || 0));
+      body = items.map(it =>
+        '<div class="kt-ai-row-hover" style="display:flex;align-items:center;gap:var(--kt-ai-space-3);padding:3px 0;font-size:var(--kt-ai-text-xs)">' +
+        '<span style="flex:1;position:relative;border-radius:var(--kt-ai-radius-sm);overflow:hidden;padding:4px 8px;background:var(--kt-ai-bg)">' +
+        '<span style="position:absolute;inset:0;width:' + Math.round((+it.value || 0) / max * 100) + '%;background:var(--kt-ai-bg-soft);border-radius:var(--kt-ai-radius-sm)"></span>' +
+        '<span style="position:relative">' + esc(it.label) + "</span></span>" +
+        '<span class="kt-ai-num" style="width:56px;text-align:right">' + esc(it.value) + (br.unit ? ' <span class="kt-ai-meta">' + esc(br.unit) + "</span>" : "") + "</span></div>").join("");
+    }
+    return '<section class="kt-ai-chart-card" style="margin-bottom:0"><div class="cc-head"><div class="cc-title">' + esc(br.title) + "</div></div>" + body +
+      (br.note ? '<div class="kt-ai-meta" style="margin-top:var(--kt-ai-space-4)">' + esc(br.note) + "</div>" : "") + "</section>";
+  }).join("") + "</div>";
+  if (att.length) {
+    const regIdx = (CFG.nav || []).findIndex(n => n && n.view === "registry");
+    h += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin:var(--kt-ai-space-8) 0 var(--kt-ai-space-4)"><div class="kt-ai-h3">Требует внимания</div>' +
+      (regIdx > 0 ? '<button class="cc-link" type="button" onclick="S.nav(' + regIdx + ')">' + esc((CFG.nav[regIdx] || {}).label || "Все записи") + " →</button>" : "") + "</div>" +
+      plainTable(att.slice(0, 5));
+    if (att.length > 5 && regIdx > 0) h += '<div class="kt-ai-meta" style="margin-top:var(--kt-ai-space-3)">Ещё ' + (att.length - 5) + ' — в разделе «' + esc((CFG.nav[regIdx] || {}).label) + "»</div>";
+  }
+  return h;
+}
+S.dashKpi = ki => { state.dashKpi = ki; render(); };
+// cockpit: один фокусный объект с сигналами и решением + компактная очередь сбоку (мониторинг/исключения)
+function renderCockpit() {
+  const sc = CFG.scenario || {}, d = CFG.drawer || {};
+  const focal = attentionFirst()[0] || rows[0];
+  let html = renderHead();
+  if (!focal) return html + '<div class="kt-ai-empty"><span class="title">Пока нет объектов</span></div>';
+  const flags = focal._flags || [];
+  html += '<div style="display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:var(--kt-ai-space-6);margin-top:var(--kt-ai-space-6)">';
+  html += '<div class="kt-ai-card" style="padding:var(--kt-ai-space-7)"><div class="kt-ai-h2">' + esc(focal[d.titleKey || cols[0].key]) + "</div>" +
+    '<div style="margin:6px 0 var(--kt-ai-space-5)">' + (statusCol ? statusTag(focal[statusCol]) : "") + "</div>" +
+    (d.fields && d.fields.length ? d.fields : cols).map(f => '<div class="kt-ai-prop"><span class="k">' + esc(f.label) + '</span><span class="v">' + esc(fmtVal(focal[f.key]) ?? "–") + "</span></div>").join("") +
+    (flags.length ? '<div class="kt-ai-label" style="margin-top:var(--kt-ai-space-5)">' + esc(d.flagsLabel || "Проверки агента") + "</div>" +
+      flags.map(f => '<div class="kt-ai-banner" data-tone="info" style="margin-top:var(--kt-ai-space-2)">' + esc(f) + "</div>").join("") : "") +
+    '<div class="drawer-actions"><button class="kt-ai-btn" data-variant="primary" onclick="state.openRow=' + focal._i + ';S.askApprove()">' + esc(sc.control || "Подтвердить") + "</button>" +
+    (sc.reject ? '<button class="kt-ai-btn" onclick="state.openRow=' + focal._i + ';S.reject()">' + esc(sc.reject) + "</button>" : "") +
+    "</div></div>";
+  html += '<div><div class="kt-ai-label" style="margin-bottom:var(--kt-ai-space-3)">Очередь</div>' +
+    rows.map(r => '<div class="kt-ai-nav-item" onclick="S.open(' + r._i + ')" style="cursor:pointer;justify-content:space-between;gap:var(--kt-ai-space-3)"><span class="kt-ai-truncate">' + esc(r[d.titleKey || cols[0].key]) + "</span>" + (statusCol ? statusTag(r[statusCol]) : "") + "</div>").join("") + "</div>";
+  return html + "</div>";
+}
+
+// compare: сверка двух источников по парам полей, расхождения подсвечены (аудит/финансы/договоры)
+function renderCompare() {
+  const sc = CFG.scenario || {}, d = CFG.drawer || {}, cmp = CFG.compare || {};
+  const pairs = Array.isArray(cmp.pairs) ? cmp.pairs : [];
+  if (!pairs.length) return renderMain();   // защита: нет пар → надёжная очередь
+  const focal = rows[state.focusRow] || attentionFirst()[0] || rows[0];
+  let html = renderHead();
+  if (!focal) return html + '<div class="kt-ai-empty"><span class="title">Пока нет объектов для сверки</span></div>';
+  const mism = p => String(focal[p.a] ?? "") !== String(focal[p.b] ?? "");
+  // в узких панелях сверки поле стопкой (метка над значением) – фикс. ширина .kt-ai-prop тут ломает перенос
+  const panel = (label, side) => '<div class="kt-ai-card" style="padding:var(--kt-ai-space-6)"><div class="kt-ai-label" style="margin-bottom:var(--kt-ai-space-4)">' + esc(label) + "</div>" +
+    pairs.map(p => '<div style="padding:6px 8px;border-radius:var(--kt-ai-radius-md);margin-bottom:2px' + (mism(p) ? ';background:var(--kt-ai-status-warn-bg)' : '') + '">' +
+      '<div class="kt-ai-meta" style="font-size:var(--kt-ai-text-2xs)">' + esc(p.label) + '</div>' +
+      '<div style="font-size:var(--kt-ai-text-sm);margin-top:1px">' + esc(fmtVal(focal[side === "a" ? p.a : p.b]) ?? "–") + '</div></div>').join("") + "</div>";
+  const flags = focal._flags || [];
+  html += '<div style="display:grid;grid-template-columns:230px minmax(0,1fr);gap:var(--kt-ai-space-6);margin-top:var(--kt-ai-space-6)">';
+  html += '<div><div class="kt-ai-label" style="margin-bottom:var(--kt-ai-space-3)">Объекты сверки</div>' +
+    rows.map(r => '<div class="kt-ai-nav-item" onclick="S.compareFocus(' + r._i + ')" style="cursor:pointer;justify-content:space-between;gap:var(--kt-ai-space-3)' + (r._i === focal._i ? ";background:var(--kt-ai-bg-active)" : "") + '"><span class="kt-ai-truncate">' + esc(r[d.titleKey || cols[0].key]) + "</span>" + (statusCol ? statusTag(r[statusCol]) : "") + "</div>").join("") + "</div>";
+  html += '<div><div class="kt-ai-h2" style="margin-bottom:var(--kt-ai-space-4)">' + esc(focal[d.titleKey || cols[0].key]) + "</div>" +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--kt-ai-space-4)">' + panel(cmp.aLabel || "Источник A", "a") + panel(cmp.bLabel || "Источник B", "b") + "</div>" +
+    (flags.length ? '<div class="kt-ai-label" style="margin-top:var(--kt-ai-space-5)">' + esc(d.flagsLabel || "Расхождения") + "</div>" + flags.map(f => '<div class="kt-ai-banner" data-tone="warn" style="margin-top:var(--kt-ai-space-2)">' + esc(f) + "</div>").join("") : "") +
+    '<div class="drawer-actions"><button class="kt-ai-btn" data-variant="primary" onclick="state.openRow=' + focal._i + ';S.askApprove()">' + esc(sc.control || "Подтвердить") + "</button>" +
+    (sc.reject ? '<button class="kt-ai-btn" onclick="state.openRow=' + focal._i + ';S.reject()">' + esc(sc.reject) + "</button>" : "") +
+    "</div></div>";
+  return html + "</div>";
+}
+
+// conversational: чат как главная рабочая область (референс ElevenLabs Conversational AI).
+// Орб-аватар ассистента, ответ без пузыря, подсказки, prompt-bar снизу. Переиспользует S.aiAsk.
+function renderConversational() {
+  const ai = CFG.ai || {}, sc = CFG.scenario || {};
+  $("pageTitle").textContent = sc.headline || CFG.product.name;
+  $("pageSub").textContent = CFG.product.purpose || "";
+  let h = '<div style="max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:var(--kt-ai-space-6);height:calc(100dvh - 106px);min-height:420px">';
+  h += bannerHtml();
+  // лента (пустая и скрытая до первого вопроса)
+  h += '<div class="kt-ai-chat" id="convChat" data-fill="true" role="log" aria-live="polite" aria-label="Диалог с агентом" style="display:none"></div>';
+  // подсказки + композер: единый док, который переезжает из hero-центра вниз
+  let dock = '<div id="convDock" style="display:flex;flex-direction:column;gap:var(--kt-ai-space-3);width:100%;max-width:680px;margin:0 auto">';
+  if (ai.suggestions && ai.suggestions.length)
+    dock += '<div class="kt-ai-suggestions" style="justify-content:center">' +
+      ai.suggestions.map(s => '<button class="kt-ai-suggestion" onclick="S.aiAsk(this.textContent,\'convChat\')">' + esc(s) + "</button>").join("") + "</div>";
+  dock += '<div class="kt-ai-prompt-bar"><textarea rows="1" id="convInput" aria-label="Сообщение агенту" placeholder="Спросить агента…" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();S.aiAsk(this.value,\'convChat\');this.value=\'\'}"></textarea>' +
+    '<button class="kt-ai-prompt-send" aria-label="Отправить" onclick="var i=document.getElementById(\'convInput\');S.aiAsk(i.value,\'convChat\');i.value=\'\'"><svg class="kt-icon"><use href="#send"></use></svg></button></div>' +
+    '<span class="kt-ai-gen-label" style="text-align:center">Сгенерировано ИИ</span></div>';
+  // hero: приветствие без пузыря, всё одной центрированной группой (паттерн пустого чата)
+  h += '<div id="convHero" style="flex:1 1 auto;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--kt-ai-space-7)">' +
+    '<span aria-hidden="true" style="width:44px;height:44px;border-radius:50%;background:var(--kt-ai-ai-orb)"></span>' +
+    '<div style="max-width:560px;text-align:center;font-size:var(--kt-ai-text-md);line-height:1.65">' + esc(ai.intro || "Здравствуйте! Чем могу помочь?") + "</div>" +
+    dock + "</div>";
+  return h + "</div>";
+}
+
+// custom: запасной архетип для экранов, не подходящих под другие (референс ElevenLabs settings-detail).
+// Свободная компоновка из секций-карточек по контракту CFG.sections. Никогда не форсит таблицу.
+function renderCustom() {
+  const sc = CFG.scenario || {};
+  $("pageTitle").textContent = sc.headline || CFG.product.name;
+  $("pageSub").textContent = CFG.product.purpose || "";
+  const sections = Array.isArray(CFG.sections) ? CFG.sections : [];
+  // Ширину называет ПРОДУКТ, а не подбор типов секций. Мера для чтения
+  // сплошного текста (720px) разумна, но секция `fields` — не сплошной текст, а
+  // пары «подпись — значение»: таблица критериев с доказательствами на 720px
+  // читается хуже, чем на общей ширине, и экран выглядел съехавшим к центру,
+  // потому что заголовок оставался во всю ширину. Раньше продукт добивался
+  // нужной ширины, подбирая типы секций, — это подбор, а не решение.
+  //   "width": "full"    — общая ширина (по умолчанию для любой не-текстовой секции)
+  //   "width": "reading" — мера чтения, ~720px
+  const автоШирина = sections.some(s => s && ((s.type && s.type !== "text") || (s.fields && s.fields.length))) ? "full" : "reading";
+  const wide = (CFG.width || автоШирина) === "full";
+  let h = '<div style="max-width:' + (wide ? "1080px" : "720px") + ';margin:0 auto">' + renderHead();
+  if (!sections.length) {
+    h += '<div class="kt-ai-card" style="margin-top:var(--kt-ai-space-6)"><div class="kt-ai-empty">' +
+      '<div class="icon-spot"><svg class="kt-icon kt-icon-lg" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/></svg></div>' +
+      '<span class="title">Экран ещё не наполнен</span><span>Опишите разделы в contract.sections — они появятся карточками здесь</span></div></div>';
+  } else {
+    // композиция: каждая секция — блок из примитивов системы; half-секции встают в две колонки
+    const block = s => {
+      const head = '<div class="kt-ai-h3">' + esc(s.title || "") + "</div>" +
+        (s.description ? '<div class="kt-ai-meta" style="margin-top:2px;margin-bottom:var(--kt-ai-space-4)">' + esc(s.description) + "</div>" : '<div style="margin-bottom:var(--kt-ai-space-4)"></div>');
+      if (s.type === "kpis") return head + (CFG.kpis && CFG.kpis.length ? '<div class="kt-ai-kpi-strip" data-cards="true">' + CFG.kpis.map(k => kpiHtml(k)).join("") + "</div>" : "");
+      if (s.type === "chart" && s.chart) return head + analyticsChartCard(s.chart, 0);
+      if (s.type === "table") return head + plainTable(rows);
+      if (s.type === "chat") { const ai = CFG.ai || {}; return head + '<div class="kt-ai-chat" data-scroll="true" id="secChat">' + msgHtml("assistant", ai.intro || "Чем помочь?") + "</div>" +
+        (ai.suggestions && ai.suggestions.length ? '<div class="kt-ai-suggestions" style="margin-top:var(--kt-ai-space-3)">' + ai.suggestions.map(x => '<button class="kt-ai-suggestion" onclick="S.aiAsk(this.textContent,\'secChat\')">' + esc(x) + "</button>").join("") + "</div>" : ""); }
+      if (s.type === "cards") return head + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:var(--kt-ai-space-4)">' +
+        (s.items || []).map(it => '<div class="kt-ai-card kt-ai-hover-lift" role="button" tabindex="0" onclick="toast(\'' + esc(it.title) + ' – заглушка прототипа\',\'\')" onkeydown="if(event.key===\'Enter\')this.click()" style="cursor:pointer;padding:var(--kt-ai-space-5)">' +
+          '<div style="display:flex;justify-content:space-between;gap:var(--kt-ai-space-3);align-items:baseline"><span style="font-size:var(--kt-ai-text-sm);font-weight:500">' + esc(it.title) + "</span>" +
+          (it.badge ? '<span class="kt-ai-status-pill" data-status="' + esc(it.tone || "info") + '">' + esc(it.badge) + "</span>" : "") + "</div>" +
+          (it.text ? '<div class="kt-ai-meta" style="margin-top:var(--kt-ai-space-2);line-height:1.45">' + esc(it.text) + "</div>" : "") + "</div>").join("") + "</div>";
+      return head +
+        (s.body ? '<div style="font-size:var(--kt-ai-text-sm);white-space:pre-wrap;line-height:var(--kt-ai-leading-normal)">' + esc(s.body) + "</div>" : "") +
+        (Array.isArray(s.fields) && s.fields.length ? s.fields.map(f => '<div class="kt-ai-prop"><span class="k">' + esc(f.label) + '</span><span class="v">' + esc(f.value ?? "–") + "</span></div>").join("") : "");
+    };
+    h += '<div class="kt-ai-cols" style="grid-template-columns:1fr 1fr;margin-top:var(--kt-ai-space-5)">' +
+      sections.map(s => '<div class="kt-ai-card" style="padding:var(--kt-ai-space-7)' + (s.width === "half" ? "" : ";grid-column:1 / -1") + '">' + block(s) + "</div>").join("") + "</div>";
+  }
+  if (sc.control) h += '<div style="margin-top:var(--kt-ai-space-6);display:flex;gap:var(--kt-ai-space-4)">' +
+    '<button class="kt-ai-btn" data-variant="primary" onclick="S.customAction()">' + esc(sc.control) + "</button>" +
+    (sc.reject ? '<button class="kt-ai-btn" onclick="S.customAction()">' + esc(sc.reject) + "</button>" : "") + "</div>";
+  return h + "</div>";
+}
+S.customAction = () => toast(((CFG.scenario || {}).control || "Готово") + " – выполнено", "ok");
+
+// Hero (ElevenLabs): имя РАЗДЕЛА слева + подпись, главное действие справа. Лого — только в sidebar.
+function pageHero(title, sub, action) {
+  return '<header class="page-hero"><div class="ph-text"><h1>' + esc(title) + "</h1>" +
+    (sub ? '<div class="sub">' + esc(sub) + "</div>" : "") + "</div>" +
+    (action ? '<div class="ph-action">' + action + "</div>" : "") + "</header>";
+}
+function render() {
+  const main = state.navIndex === 0;
+  const sc = CFG.scenario || {};
+  const archetype = CFG.archetype || CFG.layout || "queue";
+  const chatFill = main && archetype === "conversational";   // чат сам владеет областью (без page-hero, как в React fillBody)
+  const navItem = (CFG.nav || [])[state.navIndex] || {};
+  const isDocs = !main && navItem.view === "documents";       // секция-коллекция документов (с возможностью скачать)
+  const isRegistry = !main && navItem.view === "registry" && CFG.table && (CFG.table.rows || []).length;  // полный реестр (главная — только обзор)
+  const title = main ? (sc.headline || CFG.product.name) : navItem.label;
+  const sub = (main || isDocs || isRegistry) ? (CFG.product.purpose || "") : "";
+  const action = (main || isRegistry) ? '<button class="kt-ai-btn" data-variant="primary" onclick="S.newCase()"><svg class="kt-icon kt-icon-sm" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>' + esc(createLabel) + "</button>" : "";
+  const showHero = (main && !chatFill) || isDocs || isRegistry;
+  const body = main ? mainByLayout() : (isRegistry ? renderMain() : (isDocs ? renderDocs(navItem) : renderStub(navItem.label)));
+  // Вывод — последний блок экрана: он читается после данных, а не вместо них.
+  // Место одно на все архетипы, поэтому дописывается здесь, а не в каждом теле.
+  // Чат владеет всей областью сам (chatFill) — там дописывать некуда.
+  const вывод = (main && !chatFill) || isRegistry ? conclusionHtml() : "";
+  $("view").innerHTML = (showHero ? pageHero(title, sub, (main || isRegistry) ? action : "") : "") + body + вывод;
+  $("pageTitle").textContent = title; $("pageSub").textContent = sub;
+  const top = $("topSearch"); if (top && top.value !== state.query) top.value = state.query;  // топбар-поиск держит state.query
+}
+S.compareFocus = i => { state.focusRow = i; render(); };
+// загрузочное состояние (ДС: лоадеры на всём, что дольше 300мс) – показываем один раз при гидрации
+function renderSkeleton() {
+  return '<div style="margin-top:var(--kt-ai-space-8)">' +
+    '<div class="kt-ai-skeleton" style="height:28px;width:240px;margin-bottom:var(--kt-ai-space-6)"></div>' +
+    '<div class="kt-ai-table-wrap">' +
+    Array.from({ length: 6 }).map(() => '<div class="kt-ai-skeleton" style="height:44px;margin:var(--kt-ai-space-2) 0"></div>').join("") +
+    "</div></div>";
+}
+
+/* ---------- Drawer записи ---------- */
+// Карточка кейса: что сделал агент (анализ + признаки) + что решает человек (рекомендация, изменяемое действие)
+S.open = i => {
+  const r = rows[i]; if (!r) return;
+  state.openRow = i;
+  const d = CFG.drawer || {}; const sc = CFG.scenario || {};
+  const flags = r._flags || [];
+  const recs = flags.filter(f => /^рекоменд/i.test(f));
+  const signals = flags.filter(f => !/^рекоменд/i.test(f));
+  const recText = recs.length ? recs[0].replace(/^Рекомендация:\s*/i, "") : "";
+  const acts = Array.isArray(sc.actions) ? sc.actions : [];
+  const preIdx = Math.max(0, acts.findIndex(a => recText && recText.toLowerCase().startsWith(a.toLowerCase().split(/[\s(/]/)[0])));
+  const fields = (d.fields || []).map(f => '<div class="kt-ai-prop"><span class="k">' + esc(f.label) + '</span><span class="v">' + esc(fmtVal(r[f.key]) ?? "–") + "</span></div>").join("");
+
+  let h = '<div class="drawer-head"><div class="t"><div class="kt-ai-h2" id="drawerTitle">' + esc(r[d.titleKey || cols[0].key]) + "</div>" +
+    '<div style="margin-top:6px">' + (statusCol ? statusTag(r[statusCol]) : "") + "</div></div>" +
+    '<button class="kt-ai-icon-button" aria-label="Закрыть" onclick="S.close()"><svg class="kt-icon" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div>';
+
+  h += '<div class="drawer-sec">' +
+    (sc.aiSummary ? '<div class="kt-ai-gen-label">Что сделал агент</div><p class="agent-summary">' + esc(sc.aiSummary) + "</p>" : "") +
+    fields + "</div>";
+
+  const docs = Array.isArray(r._docs) ? r._docs : [];
+  if (docs.length) h += '<div class="drawer-sec"><div class="kt-ai-label">Документы</div><div class="kt-ai-doc-list" style="margin-top:var(--kt-ai-space-3)">' +
+    docs.map(dd => docCard(dd, "")).join("") + "</div></div>";
+
+  if (signals.length) h += '<div class="drawer-sec"><div class="kt-ai-label">' + esc(d.flagsLabel || "Признаки риска") + "</div>" +
+    signals.map(f => '<div class="agent-signal"><svg class="kt-icon kt-icon-sm" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg><span>' + esc(f) + "</span></div>").join("") + "</div>";
+
+  h += '<div class="drawer-sec decision"><div class="kt-ai-label">Решение</div>';
+  if (recText) h += '<div class="rec-box"><span class="kt-ai-gen-label" style="margin-bottom:6px">Рекомендация агента</span>' + esc(recText) + "</div>";
+  if (acts.length) h += '<div class="kt-ai-field" style="margin-top:var(--kt-ai-space-5)"><label for="recSelect">Действие — можно изменить</label>' +
+    '<select class="kt-ai-select" id="recSelect">' + acts.map((a, idx) => "<option" + (idx === preIdx ? " selected" : "") + ">" + esc(a) + "</option>").join("") + "</select></div>";
+  h += '<div class="drawer-actions">' +
+    '<button class="kt-ai-btn" data-variant="primary" onclick="S.askApprove()">' + esc(sc.control || "Подтвердить") + "</button>" +
+    (sc.reject ? '<button class="kt-ai-btn" onclick="S.reject()">' + esc(sc.reject) + "</button>" : "") +
+    "</div></div>";
+
+  const dr = $("drawer");
+  dr.innerHTML = h;
+  dr.style.display = "block";
+  state._drawerReturn = document.activeElement;
+  dr.onkeydown = e => { if (e.key === "Escape") { e.stopPropagation(); S.close(); } };
+  dr.focus();
+};
+S.bannerAction = () => toast("Открываю связанный пакет работ", "");
+S.close = () => { $("drawer").style.display = "none"; state.openRow = -1; const p = state._drawerReturn; if (p && p.focus) p.focus(); };
+// Row-actions (ElevenLabs): kebab на hover ряда → быстрые действия
+S.rowMenu = (i, e) => {
+  e.stopPropagation();
+  const sc = CFG.scenario || {};
+  const m = $("rowMenu");
+  m.innerHTML =
+    '<button role="menuitem" class="item" onclick="S.closeMenus();S.open(' + i + ')"><svg class="kt-icon kt-icon-sm" viewBox="0 0 24 24"><path d="M15 3h6v6M10 14L21 3M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/></svg>Открыть</button>' +
+    (sc.control ? '<button role="menuitem" class="item" onclick="S.closeMenus();S.quickApprove(' + i + ')"><svg class="kt-icon kt-icon-sm" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>' + esc(sc.control) + '</button>' : '') +
+    (sc.reject ? '<button role="menuitem" class="item" data-danger="true" onclick="S.closeMenus();S.quickReject(' + i + ')"><svg class="kt-icon kt-icon-sm" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>' + esc(sc.reject) + '</button>' : '');
+  const b = e.target.closest("button").getBoundingClientRect();
+  S.closeMenus();
+  m.style.top = (b.bottom + 4) + "px";
+  m.style.left = Math.max(8, Math.min(b.right - 200, window.innerWidth - 220)) + "px";
+  m.dataset.open = "true";
+};
+S.quickApprove = i => { const sc = CFG.scenario || {}; const r = rows[i]; if (r && statusCol && sc.approveTo) r[statusCol] = sc.approveTo; render(); toast((sc.control || "Подтверждено") + " – выполнено", "ok"); };
+S.quickReject = i => { const sc = CFG.scenario || {}; const r = rows[i]; if (r && statusCol && sc.rejectTo) r[statusCol] = sc.rejectTo; render(); toast(sc.reject || "Возвращено", "warn"); };
+
+/* ---------- Контрольное действие (подтверждение модалкой) ---------- */
+S.askApprove = () => {
+  const sc = CFG.scenario || {};
+  $("modal").innerHTML = '<div class="kt-ai-modal" role="dialog" aria-modal="true" aria-label="Подтверждение действия"><div class="modal-title">' + esc(sc.control || "Подтвердить") + "?</div>" +
+    '<div class="kt-ai-meta">' + esc(sc.confirmText || "Действие будет зафиксировано.") + "</div>" +
+    '<div class="modal-actions"><button class="kt-ai-btn" onclick="S.closeModal()">Отмена</button>' +
+    '<button class="kt-ai-btn" data-variant="primary" onclick="S.approve()">' + esc(sc.control || "Подтвердить") + "</button></div></div>";
+  $("modal").style.display = "flex";
+};
+S.closeModal = () => { $("modal").style.display = "none"; };
+S.approve = () => {
+  const sc = CFG.scenario || {};
+  const r = rows[state.openRow];
+  const sel = $("recSelect");
+  const act = sel ? sel.value : "";
+  if (r && statusCol && sc.approveTo) r[statusCol] = sc.approveTo;
+  S.closeModal(); S.close(); render();
+  toast(act ? ("Действие назначено: " + act) : ((sc.control || "Подтверждено") + " – выполнено"), "ok");
+};
+S.reject = () => {
+  const sc = CFG.scenario || {};
+  const r = rows[state.openRow];
+  if (r && statusCol && sc.rejectTo) r[statusCol] = sc.rejectTo;
+  S.close(); render();
+  toast(sc.reject || "Возвращено", "warn");
+};
+S.bulkApprove = () => {
+  const sc = CFG.scenario || {};
+  rows.forEach(r => { if (state.selected.has(r._i) && statusCol && sc.approveTo) r[statusCol] = sc.approveTo; });
+  const n = state.selected.size; state.selected.clear(); render();
+  toast(n + " записей: " + (sc.control || "подтверждено"), "ok");
+};
+
+/* ---------- Список ---------- */
+S.nav = i => { state.navIndex = i; renderNav(); render(); };
+S.filter = k => { state.statusFilter = k; state.page = 1; render(); };
+S.sel = (i, on) => { if (on) state.selected.add(i); else state.selected.delete(i); render(); };
+S.clearSel = () => { state.selected.clear(); render(); };
+S.toggleSidebar = () => { const sb = $("sidebar"); sb.dataset.open = sb.dataset.open === "true" ? "false" : "true"; };
+
+/* ---------- AI-панель ---------- */
+let aiOpen = false;
+S.toggleAi = () => { aiOpen = !aiOpen; $("aiPanel").style.display = aiOpen ? "flex" : "none"; $("aiFab").style.display = aiOpen ? "none" : "flex"; if (aiOpen) renderAi(); };
+// Правая панель «Активность» — лента действий агента/истории решений (референс из видео Kole Jain)
+S.toggleActivity = () => {
+  const p = $("actPanel");
+  if (p.style.display !== "none") { p.style.display = "none"; return; }
+  const tone = t => t === "info" ? "var(--kt-ai-status-info-fg)" : toneFg(t, "var(--kt-ai-fg-faint)");
+  const items = CFG.activity || [];
+  p.innerHTML = '<div class="act-head"><strong>Активность</strong><button class="kt-ai-icon-button" aria-label="Закрыть" onclick="S.toggleActivity()"><svg class="kt-icon"><use href="#x"></use></svg></button></div>' +
+    '<div class="kt-ai-activity">' + items.map(a =>
+      '<div class="act-item"><span class="act-dot" style="background:' + tone(a.tone) + '"></span>' +
+      '<div class="act-title">' + esc(a.title || "") + "</div>" +
+      '<div class="act-time">' + esc([a.time, a.ago].filter(Boolean).join(" · ")) + "</div>" +
+      ((a.who || (a.tags && a.tags.length) || a.summary || a.link) ?
+        '<div class="act-card">' +
+        (a.who ? '<div class="act-row"><span class="k">Кто</span><span class="v">' + esc(a.who) + "</span></div>" : "") +
+        (a.tags && a.tags.length ? '<div class="act-row"><span class="k">Данные</span><span class="v">' + a.tags.map(t => '<span class="kt-ai-chip">' + esc(t) + "</span>").join("") + "</span></div>" : "") +
+        (a.summary ? '<div class="act-summary">' + esc(a.summary) + "</div>" : "") +
+        (a.link ? '<button class="kt-ai-btn" data-size="sm" data-variant="ghost" onclick="toast(\'' + esc(a.link) + " – заглушка','')\">" + esc(a.link) + ' →</button>' : "") +
+        "</div>" : "") +
+      "</div>").join("") + "</div>";
+  p.style.display = "block";
+};
+function renderAi() {
+  const ai = CFG.ai || {};
+  $("aiPanel").innerHTML =
+    '<div class="drawer-head"><div class="t kt-ai-h2">Ассистент</div>' +
+    '<button class="kt-ai-icon-button" aria-label="Закрыть" onclick="S.toggleAi()"><svg class="kt-icon" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div>' +
+    '<div class="kt-ai-chat" id="aiChat">' + msgHtml("assistant", ai.intro || "Чем помочь?") + "</div>" +
+    '<div class="ai-panel-foot">' +
+    '<div class="kt-ai-suggestions">' + (ai.suggestions || []).map(s => '<button class="kt-ai-suggestion" onclick="S.aiAsk(this.textContent)">' + esc(s) + "</button>").join("") + "</div>" +
+    '<div class="kt-ai-prompt-bar"><textarea rows="1" id="aiInput" placeholder="Спросить…" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();S.aiAsk(this.value);this.value=\'\'}"></textarea>' +
+    '<button class="kt-ai-prompt-send" aria-label="Отправить" onclick="var i=document.getElementById(\'aiInput\');S.aiAsk(i.value);i.value=\'\'"><svg class="kt-icon" viewBox="0 0 24 24"><path d="M12 19V5m0 0l-6 6m6-6l6 6"/></svg></button></div>' +
+    '<span class="kt-ai-gen-label">Сгенерировано ИИ</span></div>';
+}
+function msgHtml(role, text, streaming) {
+  if (role === "user") return '<div class="kt-ai-msg" data-role="user"><div class="body">' + esc(text) + "</div></div>";
+  return '<div class="kt-ai-msg" data-role="assistant"' + (streaming ? ' data-streaming="true"' : "") + ' style="align-items:flex-start">' +
+    '<span class="msg-orb" aria-hidden="true"></span><div class="body">' + esc(text) + "</div></div>";
+}
+S.aiAsk = (q, chatId) => {
+  q = (q || "").trim(); if (!q) return;
+  const ai = CFG.ai || {};
+  const chat = $(chatId || "aiChat");
+  if (!chat) return;
+  const hero = document.getElementById("convHero");
+  if (hero && chatId === "convChat") {   // первый вопрос: hero складывается – интро становится первым сообщением, док уезжает вниз
+    chat.style.display = "";
+    chat.insertAdjacentHTML("beforeend", msgHtml("assistant", (CFG.ai || {}).intro || "Здравствуйте! Чем могу помочь?"));
+    const dock = document.getElementById("convDock");
+    if (dock) hero.parentElement.appendChild(dock);
+    hero.remove();
+  }
+  chat.insertAdjacentHTML("beforeend", msgHtml("user", q));
+  const a = (ai.answers || {})[q] || ai.fallback || "Ответ-заглушка прототипа.";
+  chat.insertAdjacentHTML("beforeend", msgHtml("assistant", "", true));
+  const msg = chat.lastElementChild, body = msg.querySelector(".body");
+  let i = 0;
+  const t = setInterval(() => {
+    body.textContent = a.slice(0, i += 4);
+    chat.scrollTop = chat.scrollHeight;
+    if (i >= a.length) { clearInterval(t); msg.dataset.streaming = ""; }
+  }, 16);
+  chat.scrollTop = chat.scrollHeight;
+};
+
+/* ---------- Топбар ---------- */
+function toast(text, tone) {
+  const d = document.createElement("div");
+  d.className = "kt-ai-toast"; d.dataset.tone = tone || "";
+  d.textContent = text;
+  $("toasts").appendChild(d);
+  setTimeout(() => d.remove(), 3500);
+}
+$("topSearch").addEventListener("input", e => { state.query = e.target.value; state.page = 1; render(); });
+$("themeToggle").onclick = () => {
+  const next = document.documentElement.dataset.theme === "light" ? "dark" : "light";
+  document.documentElement.dataset.theme = next;
+  $("themeToggle").dataset.mode = next;
+};
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") { S.close(); S.closeModal(); S.closeMenus(); if (aiOpen) S.toggleAi(); }
+  // Сочетание и его подпись включаются вместе: выключил подпись — выключено и
+  // сочетание, иначе в продукте живёт незаявленная горячая клавиша.
+  if ((CFG.search || {}).shortcut !== false &&
+      (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); $("topSearch").focus(); }
+});
+
+renderTop(); renderNav();
+$("view").innerHTML = renderSkeleton();
+setTimeout(render, 400);
+setTimeout(S.maybeOnboarding, 900);
+</script>
+<!-- Режим обратной связи прототипа (DoD #6): владелец кликает по элементу и оставляет заметку → экспорт в markdown для БА. Самодостаточен, грузится тихо. -->
+<script data-kt-ai-boot="js">
+// async = false — вставленный скриптом <script> иначе выполняется в порядке
+// загрузки, а не вставки. Файлы независимы, но порядок в прототипе должен быть
+// воспроизводимым: иначе «иногда работает» отлаживают в продукте, а не здесь.
+["kt-ai-orb.js", "kt-ai-chart-tip.js", "kt-ai-composer.js", "kt-ai-feedback.js"].forEach(function (файл) {
+  var тег = document.createElement("script");
+  тег.src = window.ktAiAsset(файл);
+  тег.async = false;
+  document.body.appendChild(тег);
+});
+</script>
+</body>
+</html>
